@@ -1,0 +1,11 @@
+{
+  "defaults": {
+    "model": "opencode/big-pickle"
+  },
+  "models": {
+    "big-pickle": {
+      "provider": "opencode",
+      "model": "big-pickle"
+    }
+  }
+}

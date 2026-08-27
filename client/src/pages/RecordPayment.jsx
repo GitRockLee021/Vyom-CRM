@@ -1,0 +1,504 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useFetch } from '../hooks/useFetch.js';
+import { useMockNav } from '../hooks/useMockNav.js';
+import { useSettings } from '../hooks/useSettings.js';
+
+const TENANT_ID = 1;
+
+const PAYMENT_METHODS = [
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'cheque', label: 'Cheque' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'card', label: 'Card' },
+];
+
+function fmtCurrency(n) {
+  const num = Number(n) || 0;
+  return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function invoiceTotal(inv) {
+  const gst = Number(inv.gst_rate) || 18;
+  return Number(inv.amount) * (1 + gst / 100);
+}
+
+function invoiceBalance(inv) {
+  return invoiceTotal(inv) - (Number(inv.paid_amount) || 0);
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+async function api(method, path, body) {
+  const res = await fetch(`/api${path}`, {
+    method,
+    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (res.status === 204) return null;
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
+  return json;
+}
+
+export default function RecordPayment() {
+  const navigate = useNavigate();
+  const handleNav = useMockNav();
+  const settings = useSettings();
+  const { id } = useParams();
+  const isSingle = Boolean(id);
+
+  const { data: clientsData } = useFetch(`/clients?tenant_id=${TENANT_ID}`);
+  const clients = Array.isArray(clientsData) ? clientsData : [];
+
+  const [invoice, setInvoice] = useState(null);
+  const [loadingInvoice, setLoadingInvoice] = useState(isSingle);
+
+  const [clientSearch, setClientSearch] = useState('');
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [clientInvoices, setClientInvoices] = useState([]);
+  const [loadingClientInvoices, setLoadingClientInvoices] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState('bank_transfer');
+  const [reference, setReference] = useState('');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isSingle) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/invoices/${id}`);
+        const inv = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(inv?.error || `Request failed (${res.status})`);
+        if (cancelled) return;
+        setInvoice(inv);
+        setAmount(String(invoiceBalance(inv).toFixed(2)));
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoadingInvoice(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isSingle]);
+
+  useEffect(() => {
+    if (isSingle || !selectedClient) return undefined;
+    let cancelled = false;
+    (async () => {
+      setLoadingClientInvoices(true);
+      try {
+        const res = await fetch(`/api/invoices?client_id=${selectedClient.id}&tenant_id=${TENANT_ID}`);
+        const list = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(list?.error || `Request failed (${res.status})`);
+        if (cancelled) return;
+        const pending = (Array.isArray(list) ? list : []).filter(
+          (inv) => !['paid', 'cancelled', 'draft'].includes(inv.status)
+        );
+        setClientInvoices(pending);
+        setSelectedIds([]);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoadingClientInvoices(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isSingle, selectedClient]);
+
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return [];
+    return clients.filter((c) => (c.name || '').toLowerCase().includes(q)).slice(0, 6);
+  }, [clients, clientSearch]);
+
+  const selectedInvoices = isSingle ? [] : clientInvoices.filter((inv) => selectedIds.includes(inv.id));
+  const selectedBalance = selectedInvoices.reduce((s, inv) => s + invoiceBalance(inv), 0);
+
+  useEffect(() => {
+    if (!isSingle && selectedBalance > 0) setAmount(selectedBalance.toFixed(2));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds]);
+
+  const singleBalance = invoice ? invoiceBalance(invoice) : 0;
+  const totalLabel = isSingle ? singleBalance : selectedBalance;
+  const remaining = totalLabel - (Number(amount) || 0);
+
+  function selectClient(c) {
+    setSelectedClient(c);
+    setClientSearch('');
+  }
+
+  function toggleInvoice(invId) {
+    setSelectedIds((ids) => (ids.includes(invId) ? ids.filter((x) => x !== invId) : [...ids, invId]));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const amt = Number(amount);
+    if (!amt || amt <= 0) { setError('Please enter a valid amount.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const paidAt = date || null;
+      if (isSingle) {
+        await api('POST', `/invoices/${id}/payments`, {
+          amount: amt,
+          method,
+          reference_no: reference || null,
+          paid_at: paidAt,
+        });
+        navigate(`/invoice/${id}`);
+      } else {
+        if (!selectedInvoices.length) { setError('Select at least one invoice to record payment.'); setSaving(false); return; }
+        let remainingAmt = amt;
+        for (const inv of selectedInvoices) {
+          if (remainingAmt <= 0) break;
+          const balance = invoiceBalance(inv);
+          const pay = Math.min(remainingAmt, balance);
+          if (pay <= 0) continue;
+          await api('POST', `/invoices/${inv.id}/payments`, {
+            amount: Number(pay.toFixed(2)),
+            method,
+            reference_no: reference || null,
+            paid_at: paidAt,
+          });
+          remainingAmt -= pay;
+        }
+        navigate('/invoices');
+      }
+    } catch (err) {
+      setError(err.message || 'Something went wrong.');
+      setSaving(false);
+    }
+  }
+
+  const inputCls = 'w-full border border-outline-variant rounded px-3 py-2 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors';
+  const labelCls = 'block font-label-md text-label-md text-on-surface-variant mb-1';
+
+  return (
+    <div className="bg-surface font-body-md text-on-surface h-screen flex overflow-hidden" onClick={handleNav}>
+      {/* SideNavBar */}
+      <aside className="bg-surface dark:bg-background border-r border-outline-variant dark:border-outline w-64 h-screen fixed left-0 top-0 z-40 flex flex-col h-full py-stack-md px-4 transition-all duration-200 ease-in-out hidden md:flex">
+        <div className="mb-stack-lg flex items-center gap-3 px-2">
+          <div className="w-10 h-10 rounded bg-primary-container flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-on-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>assured_workload</span>
+          </div>
+          <div>
+            <h2 className="font-headline-sm text-headline-sm text-primary break-words leading-tight">{settings?.company_name || 'FinConsult CRM'}</h2>
+          </div>
+        </div>
+        <nav className="flex flex-col gap-1 flex-grow">
+          <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
+            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>dashboard</span>
+            Dashboard
+          </a>
+          <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
+            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>group</span>
+            Clients
+          </a>
+          <a className="text-secondary dark:text-secondary-fixed-dim font-bold bg-secondary-fixed dark:bg-secondary-container rounded-lg font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out" href="#">
+            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>receipt_long</span>
+            Billing
+          </a>
+          <div className="flex flex-col">
+            <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
+              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>settings</span>
+              Settings
+              <span className="material-symbols-outlined text-sm ml-auto">expand_more</span>
+            </a>
+            <ul className="ml-6 mt-1 space-y-1 mb-1 border-l border-outline-variant dark:border-outline pl-3">
+              <li>
+                <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                  Company Information
+                </a>
+              </li>
+              <li>
+                <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                  Roles &amp; Permissions
+                </a>
+              </li>
+            </ul>
+          </div>
+        </nav>
+        <ul className="flex flex-col gap-1 mt-auto pt-stack-md border-t border-outline-variant dark:border-outline">
+          <li>
+            <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
+              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>contact_support</span>
+              Support
+            </a>
+          </li>
+          <li>
+            <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
+              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>logout</span>
+              Logout
+            </a>
+          </li>
+        </ul>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col md:ml-64 w-full relative h-screen overflow-hidden">
+        {/* TopNavBar */}
+        <header className="bg-surface-container-lowest dark:bg-inverse-surface border-b border-outline-variant dark:border-outline w-full h-16 sticky top-0 z-30 font-body-md text-body-md text-primary dark:text-primary-fixed flex items-center justify-between px-container-padding">
+          <button type="button" className="md:hidden p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full mr-2">
+            <span className="material-symbols-outlined">menu</span>
+          </button>
+          <div className="md:hidden font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed mr-auto">
+            {settings?.company_name || 'FinConsult CRM'}
+          </div>
+          <div className="hidden md:flex items-center bg-surface-container-low rounded-full px-4 py-2 w-96 border border-transparent focus-within:border-primary transition-colors">
+            <span className="material-symbols-outlined text-on-surface-variant mr-2 text-[20px]">search</span>
+            <input className="bg-transparent border-none focus:ring-0 w-full text-body-md font-body-md text-on-surface placeholder-on-surface-variant p-0 m-0 outline-none" placeholder="Search clients, projects, or invoices..." type="text" />
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <button type="button" className="relative p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80 transition-all">
+              <span className="material-symbols-outlined text-[24px]">notifications</span>
+              <span className="absolute top-1 right-1 bg-error text-on-error text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">5</span>
+            </button>
+            <button type="button" className="p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80 transition-all">
+              <span className="material-symbols-outlined text-[24px]">help</span>
+            </button>
+            <div className="h-6 w-[1px] bg-outline-variant mx-2"></div>
+            <button type="button" className="flex items-center gap-2 p-1 pl-2 hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80 transition-all">
+              <span className="font-label-md text-label-md text-on-surface font-semibold hidden lg:block">Profile</span>
+              <img alt="User profile avatar" className="w-8 h-8 rounded-full object-cover border border-outline-variant" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6JU0IdWSZ7-CjN638O-WcW2BmfgiG5tdXzTH__XGaKHzEXizpDaWTlYRWlw-vnPLhfyL1Nds2rOLQkuW-oKi5AsDSAjNw9A23JdslOl6ok5RVpBEJktRqYBkG-FuXSpUEK76KwXXg5_O8BGT9cVBvExeB8sRQIt-RGZhGmgcsTKlVpymeWgiLfkQv6lXQ0UDXvKrv0nL3C1AchdCMgzX6nUky5Y2y5FnjyOJ0nfstXBJag2MNwEs" />
+            </button>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <div className="flex-1 overflow-y-auto p-container-padding bg-background">
+          <div className="max-w-[1440px] mx-auto">
+            {/* Page Header */}
+            <div className="mb-stack-md">
+              <nav aria-label="Breadcrumb" className="flex text-on-surface-variant font-label-md text-label-md mb-2">
+                <ol className="flex items-center space-x-2">
+                  <li><a className="hover:text-primary transition-colors" href="#" onClick={(e) => { e.preventDefault(); navigate('/invoices'); }}>Billing</a></li>
+                  <li><span className="material-symbols-outlined text-sm">chevron_right</span></li>
+                  <li aria-current="page" className="text-primary">Record Payment</li>
+                </ol>
+              </nav>
+              <h2 className="font-headline-lg text-headline-lg text-on-surface">Record Payment</h2>
+              <p className="font-body-md text-body-md text-on-surface-variant mt-1">Log fee received against invoice</p>
+            </div>
+
+            {error && (
+              <div className="mb-stack-md px-3 py-2 rounded-lg bg-error-container text-on-error-container font-body-md text-body-md">{error}</div>
+            )}
+
+            {isSingle && loadingInvoice ? (
+              <div className="py-16 text-center font-body-md text-body-md text-on-surface-variant">Loading invoice…</div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
+                {/* Left Column */}
+                <div className="lg:col-span-8 flex flex-col gap-stack-md">
+                  {isSingle && invoice ? (
+                    <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
+                      <div>
+                        <div className="font-label-md text-label-md text-on-surface-variant uppercase mb-1">Client</div>
+                        <div className="font-body-lg text-body-lg font-semibold text-on-surface">{invoice.client_name}</div>
+                      </div>
+                      <div className="hidden md:block w-px h-10 bg-outline-variant"></div>
+                      <div>
+                        <div className="font-label-md text-label-md text-on-surface-variant uppercase mb-1">Invoice</div>
+                        <div className="font-data-mono text-data-mono text-on-surface">{invoice.invoice_number}</div>
+                      </div>
+                      <div className="hidden md:block w-px h-10 bg-outline-variant"></div>
+                      <div className="text-right">
+                        <div className="font-label-md text-label-md text-on-surface-variant uppercase mb-1">Balance Due</div>
+                        <div className="font-headline-md text-headline-md text-primary">₹ {fmtCurrency(singleBalance)}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md shadow-sm">
+                        <label className="block font-label-md text-label-md text-on-surface-variant mb-2">Search Client</label>
+                        <div className="relative max-w-md">
+                          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant">search</span>
+                          <input
+                            className="w-full bg-surface-container-lowest border border-outline-variant rounded pl-10 pr-4 py-2 text-body-md font-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                            placeholder="Start typing client name..."
+                            type="text"
+                            value={selectedClient ? selectedClient.name : clientSearch}
+                            onChange={(e) => { if (selectedClient) setSelectedClient(null); setClientSearch(e.target.value); }}
+                          />
+                          {selectedClient && (
+                            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-primary">check_circle</span>
+                          )}
+                        </div>
+                        {!selectedClient && filteredClients.length > 0 && (
+                          <ul className="mt-2 border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant max-h-56 overflow-y-auto max-w-md">
+                            {filteredClients.map((c) => (
+                              <li key={c.id}>
+                                <button type="button" className="w-full text-left px-3 py-2 hover:bg-surface-container-low transition-colors" onClick={() => selectClient(c)}>
+                                  <span className="block font-body-md text-body-md text-on-surface">{c.name}</span>
+                                  {c.city && <span className="block text-xs text-on-surface-variant">{c.city}{c.state ? `, ${c.state}` : ''}</span>}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {selectedClient && (
+                        <div className="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+                          <div className="px-stack-md py-4 border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
+                            <h3 className="font-headline-md text-headline-md text-on-surface">Pending Invoices for {selectedClient.name}</h3>
+                            <span className="font-label-md text-label-md text-on-surface-variant bg-surface-container-highest px-2 py-1 rounded">{clientInvoices.length} Found</span>
+                          </div>
+                          {loadingClientInvoices ? (
+                            <div className="p-4 text-on-surface-variant font-body-md text-body-md">Loading invoices…</div>
+                          ) : clientInvoices.length === 0 ? (
+                            <div className="p-4 text-on-surface-variant font-body-md text-body-md">No pending invoices for this client.</div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse">
+                                <thead>
+                                  <tr className="border-b border-outline-variant bg-surface-container-low text-on-surface-variant font-label-md text-label-md">
+                                    <th className="p-4 font-normal w-12 text-center"></th>
+                                    <th className="p-4 font-normal">Invoice #</th>
+                                    <th className="p-4 font-normal">Due Date</th>
+                                    <th className="p-4 font-normal text-right">Total Amount</th>
+                                    <th className="p-4 font-normal text-right">Balance Due</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="font-data-mono text-data-mono">
+                                  {clientInvoices.map((inv) => (
+                                    <tr key={inv.id} className="border-b border-outline-variant hover:bg-surface-container-low transition-colors cursor-pointer" onClick={() => toggleInvoice(inv.id)}>
+                                      <td className="p-4 text-center">
+                                        <input
+                                          type="checkbox"
+                                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                                          checked={selectedIds.includes(inv.id)}
+                                          onChange={() => toggleInvoice(inv.id)}
+                                        />
+                                      </td>
+                                      <td className="p-4 text-primary font-medium">{inv.invoice_number}</td>
+                                      <td className="p-4 text-on-surface-variant">{fmtDate(inv.due_date)}</td>
+                                      <td className="p-4 text-right">₹ {fmtCurrency(invoiceTotal(inv))}</td>
+                                      <td className="p-4 text-right font-medium text-primary">₹ {fmtCurrency(invoiceBalance(inv))}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Payment Details Form */}
+                  <form id="payment-form" onSubmit={handleSubmit}>
+                    <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md shadow-sm">
+                      <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md border-b border-outline-variant pb-2">Payment Details</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+                        <div>
+                          <label className={labelCls}>Date of Payment</label>
+                          <input className={inputCls} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Payment Method</label>
+                          <select className={`${inputCls} bg-surface-container-lowest`} value={method} onChange={(e) => setMethod(e.target.value)}>
+                            {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                          </select>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className={labelCls}>Reference / Transaction ID</label>
+                          <input className={inputCls} placeholder="e.g. UTR Number, Cheque Number" type="text" value={reference} onChange={(e) => setReference(e.target.value)} />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className={labelCls}>Internal Notes</label>
+                          <textarea className={`${inputCls} resize-none`} placeholder="Optional notes about this transaction..." rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Right Column */}
+                <div className="lg:col-span-4">
+                  <div className="sticky top-20 flex flex-col gap-stack-md">
+                    <div className="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+                      <div className="px-stack-md py-4 border-b border-outline-variant bg-surface-container-low">
+                        <h3 className="font-headline-md text-headline-md text-on-surface">Balance Tracking</h3>
+                      </div>
+                      <div className="p-stack-md flex flex-col gap-4">
+                        {isSingle && invoice ? (
+                          <>
+                            <div className="flex justify-between items-center">
+                              <span className="text-on-surface-variant">Original Amount</span>
+                              <span className="font-data-mono text-data-mono text-on-surface">₹ {fmtCurrency(invoiceTotal(invoice))}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-on-surface-variant">Paid to Date</span>
+                              <span className="font-data-mono text-data-mono text-on-surface">₹ {fmtCurrency(invoice.paid_amount)}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex justify-between items-center">
+                            <span className="text-on-surface-variant">Total Selected</span>
+                            <span className="font-data-mono text-data-mono font-medium text-primary">₹ {fmtCurrency(selectedBalance)}</span>
+                          </div>
+                        )}
+                        <div>
+                          <label className="block font-label-md text-label-md text-on-surface-variant mb-2">Amount Received (INR)</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant font-data-mono">₹</span>
+                            <input
+                              className="w-full bg-surface-container-lowest border-2 border-primary rounded pl-8 pr-4 py-2.5 font-data-mono text-data-mono font-bold text-on-surface focus:border-primary focus:ring-0 outline-none transition-colors text-right"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={amount}
+                              onChange={(e) => setAmount(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="pt-4 border-t border-outline-variant flex justify-between items-center">
+                          <span className="text-on-surface-variant font-medium">Remaining Balance</span>
+                          <span className={`font-data-mono text-data-mono font-bold ${remaining < 0 ? 'text-error' : 'text-on-surface'}`}>
+                            ₹ {fmtCurrency(remaining < 0 ? remaining : remaining)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <button
+                        type="submit"
+                        form="payment-form"
+                        disabled={saving}
+                        className="w-full bg-primary text-on-primary font-label-md text-label-md py-3 rounded flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">payments</span>
+                        {saving ? 'Recording…' : 'Record Payment'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate(isSingle ? `/invoice/${id}` : '/invoices')}
+                        className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface-variant font-label-md text-label-md py-3 rounded flex items-center justify-center hover:bg-surface-container transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
