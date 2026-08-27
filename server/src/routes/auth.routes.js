@@ -7,7 +7,7 @@ import { httpError } from '../utils/http-error.js';
 
 const router = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'finconsul-dev-secret-change-me';
+const JWT_SECRET = process.env.JWT_SECRET || 'vyom-crm-dev-secret-change-me';
 const JWT_EXPIRES = process.env.JWT_EXPIRES || '7d';
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 

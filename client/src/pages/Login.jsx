@@ -41,10 +41,10 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Brand */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <img src="/logo.png" alt="FinConsul logo" className="w-12 h-12 object-contain" />
+          <img src="/logo.png" alt="Vyom CRM logo" className="w-12 h-12 object-contain" />
           <div>
-            <h1 className="font-headline-lg text-headline-lg text-primary leading-none">FinConsul</h1>
-            <p className="font-label-md text-label-md text-on-surface-variant mt-0.5 tracking-wide">Consulting Portal</p>
+            <h1 className="font-headline-lg text-headline-lg text-primary leading-none">Vyom</h1>
+            <p className="font-label-md text-label-md text-on-surface-variant mt-0.5 tracking-wide">Fiscal Precision</p>
           </div>
         </div>
 

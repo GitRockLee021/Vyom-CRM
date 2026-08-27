@@ -34,7 +34,7 @@ export default function InvoiceDocument({ invoice, company }) {
     : { text: 'PENDING', color: 'rgba(220,38,38,0.06)' };
 
   const from = company ? {
-    name: company.company_name || 'FinConsul Pvt Ltd',
+    name: company.company_name || 'Vyom CRM',
     address: company.address || '',
     state: company.state || '',
     gstin: company.gst || '',
@@ -47,16 +47,16 @@ export default function InvoiceDocument({ invoice, company }) {
     account_number: company.account_number || '',
     ifsc: company.ifsc || '',
   } : {
-    name: 'FinConsul Pvt Ltd',
+    name: 'Vyom CRM',
     address: '123 Financial District, Suite 400\nMumbai, MH 400001, India',
     state: 'Maharashtra',
     gstin: '27AAAAA0000A1Z5',
     pan: 'AAAAA0000A',
-    email: 'billing@finconsul.com',
+    email: 'billing@vyomcrm.in',
     phone: '',
     logo_url: '',
     bank_name: 'HDFC Bank Ltd',
-    account_name: 'FinConsul Pvt Ltd',
+    account_name: 'Vyom CRM',
     account_number: '000123456789',
     ifsc: 'HDFC0000001',
   };

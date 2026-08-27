@@ -48,10 +48,10 @@ async function nextInvoiceNumber() {
   const { rows } = await query(
     `SELECT COUNT(*)::int AS count FROM invoices
      WHERE invoice_number LIKE $1`,
-    [`FC-${year}-%`]
+    [`VY-${year}-%`]
   );
   const seq = String(rows[0].count + 1).padStart(4, '0');
-  return `FC-${year}-${seq}`;
+  return `VY-${year}-${seq}`;
 }
 
 // GET /api/invoices?client_id=&status=&search=&tenant_id=

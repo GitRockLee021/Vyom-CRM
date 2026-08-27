@@ -8,7 +8,7 @@ router.get('/', async (req, res, next) => {
     await pool.query('SELECT 1');
     res.json({
       status: 'ok',
-      service: 'FinConsul API',
+      service: 'Vyom CRM API',
       database: 'connected',
       timestamp: new Date().toISOString(),
     });

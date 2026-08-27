@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-const TOKEN_KEY = 'finconsul_token';
-const USER_KEY = 'finconsul_user';
+const TOKEN_KEY = 'vyom_token';
+const USER_KEY = 'vyom_user';
 
 const AuthContext = createContext(null);
 

@@ -190,7 +190,7 @@ export default function InvoiceForm() {
             <span className="material-symbols-outlined text-on-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>assured_workload</span>
           </div>
           <div>
-            <h2 className="font-headline-sm text-headline-sm text-primary break-words leading-tight">{settings?.company_name || 'FinConsult CRM'}</h2>
+            <h2 className="font-headline-sm text-headline-sm text-primary break-words leading-tight">{settings?.company_name || 'Vyom CRM'}</h2>
           </div>
         </div>
         <nav className="flex flex-col gap-1 flex-grow">
@@ -250,7 +250,7 @@ export default function InvoiceForm() {
             <span className="material-symbols-outlined">menu</span>
           </button>
           <div className="md:hidden font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed mr-auto">
-            {settings?.company_name || 'FinConsult CRM'}
+            {settings?.company_name || 'Vyom CRM'}
           </div>
           <div className="hidden md:flex items-center bg-surface-container-low rounded-full px-4 py-2 w-96 border border-transparent focus-within:border-primary transition-colors">
             <span className="material-symbols-outlined text-on-surface-variant mr-2 text-[20px]">search</span>

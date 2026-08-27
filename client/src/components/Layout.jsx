@@ -60,7 +60,7 @@ export default function Layout() {
             </span>
           </div>
           <div>
-            <h2 className="font-headline-sm text-headline-sm text-primary break-words leading-tight">{settings?.company_name || 'FinConsult CRM'}</h2>
+            <h2 className="font-headline-sm text-headline-sm text-primary break-words leading-tight">{settings?.company_name || 'Vyom CRM'}</h2>
           </div>
         </div>
 
@@ -114,7 +114,7 @@ export default function Layout() {
           </button>
 
           <div className="md:hidden font-headline-md text-headline-md font-bold text-primary mr-auto">
-            {settings?.company_name || 'FinConsult CRM'}
+            {settings?.company_name || 'Vyom CRM'}
           </div>
 
           <div className="hidden md:flex items-center bg-surface-container-low rounded-full px-4 py-2 w-96 border border-transparent focus-within:border-primary transition-colors">

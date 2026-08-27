@@ -1,8 +1,8 @@
 -- =============================================================
--- FinConsul CRM - Starter schema
+-- Vyom CRM - Starter schema
 -- Accounting & finance consulting firm (India)
 -- Refine/extend once page designs are finalized.
--- Run with: psql -U postgres -d finconsul -f database/schema.sql
+-- Run with: psql -U postgres -d vyom_crm -f database/schema.sql
 -- =============================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto"; -- gen_random_uuid()

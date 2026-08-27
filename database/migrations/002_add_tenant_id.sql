@@ -2,7 +2,7 @@
 -- Migration 002: Add multi-tenancy support
 -- Adds tenant_id to clients (and cascades to invoices via FK).
 -- All existing rows default to tenant_id = 1.
--- Run with: psql -U postgres -d finconsul -f database/migrations/002_add_tenant_id.sql
+-- Run with: psql -U postgres -d vyom_crm -f database/migrations/002_add_tenant_id.sql
 -- =============================================================
 
 -- Add tenant_id to clients

@@ -1,0 +1,24 @@
+# Render Blueprint for Vyom CRM
+# Deploy: https://dashboard.render.com/select-repo?type=web
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: vyom-crm
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node server/src/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+        comment: Postgres connection string (paste your Supabase/Postgres URL)
+      - key: JWT_SECRET
+        generateValue: true
+        comment: Secret used to sign auth tokens
+      - key: CORS_ORIGIN
+        sync: false
+        comment: Your Render app URL, e.g. https://vyom-crm.onrender.com
+      - key: CLIENT_URL
+        sync: false
+        comment: Same as CORS_ORIGIN; used for password-reset links

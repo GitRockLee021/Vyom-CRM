@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { httpError } from '../utils/http-error.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'finconsul-dev-secret-change-me';
+const JWT_SECRET = process.env.JWT_SECRET || 'vyom-crm-dev-secret-change-me';
 
 // Express middleware that requires a valid Bearer token and attaches req.user.
 export function requireAuth(req, _res, next) {

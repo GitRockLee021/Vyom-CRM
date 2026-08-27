@@ -26,4 +26,4 @@ CREATE TABLE settings (
 CREATE INDEX IF NOT EXISTS idx_settings_tenant ON settings(tenant_id);
 
 INSERT INTO settings (tenant_id, company_name, invoice_prefix)
-VALUES (1, 'FinConsult Partners', 'INV-');
+VALUES (1, 'Vyom CRM', 'VY-');

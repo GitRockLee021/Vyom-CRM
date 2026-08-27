@@ -1,12 +1,13 @@
 import pkg from 'pg';
 const { Pool } = pkg;
 
-// Hardcoded connection string for Supabase
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is not set. Add it to .env or the hosting platform.');
+}
+
 const pool = new Pool({
-  connectionString: 'postgresql://postgres.sbfszsyrmowmwlksuhmw:Rocklee%402024@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres',
-  ssl: {
-    rejectUnauthorized: false
-  }
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
 });
 
 // Query helper
