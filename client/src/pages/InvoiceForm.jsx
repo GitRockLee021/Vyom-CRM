@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { useMockNav } from '../hooks/useMockNav.js';
+import { usePerm } from '../hooks/usePerm.js';
 import { useSettings } from '../hooks/useSettings.js';
-
-const TENANT_ID = 1;
+import AccessDenied from '../components/AccessDenied.jsx';
+import { authHeaders } from '../utils/authHeader.js';
 
 const TAX_OPTIONS = [
   { value: 18, label: '18%' },
@@ -22,7 +23,7 @@ function fmtCurrency(n) {
 async function api(method, path, body) {
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers: authHeaders(body !== undefined ? { 'Content-Type': 'application/json' } : undefined),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (res.status === 204) return null;
@@ -39,9 +40,10 @@ export default function InvoiceForm() {
   const navigate = useNavigate();
   const handleNav = useMockNav();
   const settings = useSettings();
+  const can = usePerm();
   const { id } = useParams();
   const isEdit = Boolean(id);
-  const { data } = useFetch(`/clients?tenant_id=${TENANT_ID}`);
+  const { data } = useFetch('/clients');
 
   const [clientSearch, setClientSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
@@ -50,6 +52,7 @@ export default function InvoiceForm() {
   const [issuedDate, setIssuedDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
   const [lineItems, setLineItems] = useState([{ ...EMPTY_LINE }]);
+  const [gstEnabled, setGstEnabled] = useState(true);
   const [notes, setNotes] = useState('');
   const [terms, setTerms] = useState('');
   const [error, setError] = useState('');
@@ -62,7 +65,7 @@ export default function InvoiceForm() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/invoices/${id}`);
+        const res = await fetch(`/api/invoices/${id}`, { headers: authHeaders() });
         const inv = await res.json().catch(() => null);
         if (!res.ok) throw new Error(inv?.error || `Request failed (${res.status})`);
         if (cancelled) return;
@@ -95,6 +98,7 @@ export default function InvoiceForm() {
         );
         setNotes(parsed.note || '');
         setTerms(parsed.terms || '');
+        setGstEnabled(typeof parsed.gstEnabled === 'boolean' ? parsed.gstEnabled : Number(inv.gst_rate || 0) > 0);
       } catch (err) {
         if (!cancelled) setError(err.message);
       }
@@ -110,12 +114,14 @@ export default function InvoiceForm() {
 
   const totals = useMemo(() => {
     const subtotal = lineItems.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0);
-    const gst = lineItems.reduce((s, it) => {
-      const amt = (Number(it.qty) || 0) * (Number(it.rate) || 0);
-      return s + amt * (Number(it.tax) || 0) / 100;
-    }, 0);
+    const gst = gstEnabled
+      ? lineItems.reduce((s, it) => {
+          const amt = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+          return s + amt * (Number(it.tax) || 0) / 100;
+        }, 0)
+      : 0;
     return { subtotal, gst, cgst: gst / 2, sgst: gst / 2, total: subtotal + gst };
-  }, [lineItems]);
+  }, [lineItems, gstEnabled]);
 
   function selectClient(c) {
     setSelectedClient(c);
@@ -149,7 +155,7 @@ export default function InvoiceForm() {
     try {
       const subtotal = Number(totals.subtotal.toFixed(2));
       const gst = Number(totals.gst.toFixed(2));
-      const gstRate = subtotal > 0 ? Number(((gst / subtotal) * 100).toFixed(2)) : 18;
+      const gstRate = gstEnabled && subtotal > 0 ? Number(((gst / subtotal) * 100).toFixed(2)) : 0;
       const payload = {
         client_id: selectedClient.id,
         amount: subtotal,
@@ -163,8 +169,9 @@ export default function InvoiceForm() {
             description: it.description,
             qty: Number(it.qty) || 1,
             rate: Number(it.rate) || 0,
-            tax: Number(it.tax) || 0,
+            tax: gstEnabled ? (Number(it.tax) || 0) : 0,
           })),
+          gstEnabled,
           note: notes || undefined,
           terms: terms || undefined,
         }),
@@ -180,6 +187,10 @@ export default function InvoiceForm() {
   const inputCls = 'w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary font-body-md text-body-md text-on-surface outline-none';
   const monoCls = 'w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary font-data-mono text-data-mono text-on-surface outline-none';
   const labelCls = 'font-label-md text-label-md text-on-surface-variant block mb-1';
+
+  if (!(isEdit ? can('billing.edit') : can('billing.create'))) {
+    return <AccessDenied message={isEdit ? "You don't have permission to edit invoices." : "You don't have permission to create invoices."} />;
+  }
 
   return (
     <div className="bg-surface font-body-md text-on-surface h-screen flex overflow-hidden" onClick={handleNav}>
@@ -218,11 +229,16 @@ export default function InvoiceForm() {
                   Company Information
                 </a>
               </li>
-              <li>
-                <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                  Roles &amp; Permissions
-                </a>
-              </li>
+<li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Team Members
+                    </a>
+                  </li>
+                  <li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Roles &amp; Permissions
+                    </a>
+                  </li>
             </ul>
           </div>
         </nav>
@@ -289,7 +305,7 @@ export default function InvoiceForm() {
                 <p className="font-body-md text-body-md text-on-surface-variant mt-1">{isEdit ? 'Updating billing document' : 'Drafting new billing document'}</p>
               </div>
               <div className="flex items-center gap-stack-sm">
-                {isEdit && invoiceStatus !== 'draft' && (
+                {isEdit && invoiceStatus !== 'draft' && can('billing.record_payment') && (
                   <button
                     type="button"
                     disabled={saving}
@@ -411,6 +427,21 @@ export default function InvoiceForm() {
                       <input className={inputCls} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                     </div>
                   </div>
+                  <div className="flex items-center justify-between pt-3 border-t border-outline-variant">
+                    <div>
+                      <div className="font-label-md text-label-md text-on-surface font-medium">GST Invoice</div>
+                      <div className="text-xs text-on-surface-variant mt-0.5">{gstEnabled ? 'CGST/SGST (or IGST) will apply' : 'No tax will be applied'}</div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={gstEnabled}
+                      onClick={() => setGstEnabled((v) => !v)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${gstEnabled ? 'bg-primary' : 'bg-outline-variant'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${gstEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -427,7 +458,7 @@ export default function InvoiceForm() {
                         <th className="p-4 min-w-[250px]">Service / Description</th>
                         <th className="p-4 w-28 text-right">Qty</th>
                         <th className="p-4 w-36 text-right">Rate (₹)</th>
-                        <th className="p-4 w-28 text-right">Tax %</th>
+                        {gstEnabled && <th className="p-4 w-28 text-right">Tax %</th>}
                         <th className="p-4 w-36 text-right">Amount (₹)</th>
                         <th className="p-4 w-12 text-center"></th>
                       </tr>
@@ -461,11 +492,13 @@ export default function InvoiceForm() {
                             <td className="p-4 align-top pt-4">
                               <input className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:border-secondary focus:ring-1 focus:ring-secondary outline-none font-data-mono text-data-mono text-right" type="number" min="0" step="0.01" value={item.rate} onChange={(e) => updateLineItem(idx, 'rate', e.target.value)} />
                             </td>
-                            <td className="p-4 align-top pt-4">
-                              <select className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:border-secondary focus:ring-1 focus:ring-secondary outline-none font-body-md text-body-md text-right" value={item.tax} onChange={(e) => updateLineItem(idx, 'tax', Number(e.target.value))}>
-                                {TAX_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                              </select>
-                            </td>
+                            {gstEnabled && (
+                              <td className="p-4 align-top pt-4">
+                                <select className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:border-secondary focus:ring-1 focus:ring-secondary outline-none font-body-md text-body-md text-right" value={item.tax} onChange={(e) => updateLineItem(idx, 'tax', Number(e.target.value))}>
+                                  {TAX_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                              </td>
+                            )}
                             <td className="p-4 align-top text-right font-data-mono text-data-mono pt-6">{fmtCurrency(amount)}</td>
                             <td className="p-4 align-top text-center pt-4">
                               {lineItems.length > 1 && (
@@ -506,14 +539,18 @@ export default function InvoiceForm() {
                     <span className="font-body-md text-body-md text-on-surface-variant">Subtotal</span>
                     <span className="font-data-mono text-data-mono text-on-surface">₹ {fmtCurrency(totals.subtotal)}</span>
                   </div>
-                  <div className="flex justify-between items-center py-1 text-on-surface-variant">
-                    <span className="font-body-md text-body-md">CGST</span>
-                    <span className="font-data-mono text-data-mono">₹ {fmtCurrency(totals.cgst)}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-1 text-on-surface-variant border-b border-outline-variant pb-stack-md">
-                    <span className="font-body-md text-body-md">SGST</span>
-                    <span className="font-data-mono text-data-mono">₹ {fmtCurrency(totals.sgst)}</span>
-                  </div>
+                  {gstEnabled && (
+                    <>
+                      <div className="flex justify-between items-center py-1 text-on-surface-variant">
+                        <span className="font-body-md text-body-md">CGST</span>
+                        <span className="font-data-mono text-data-mono">₹ {fmtCurrency(totals.cgst)}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1 text-on-surface-variant border-b border-outline-variant pb-stack-md">
+                        <span className="font-body-md text-body-md">SGST</span>
+                        <span className="font-data-mono text-data-mono">₹ {fmtCurrency(totals.sgst)}</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between items-center py-2 mt-2">
                     <span className="font-headline-md text-headline-md font-bold text-on-surface">Total</span>
                     <span className="font-headline-md text-headline-md font-bold text-primary">₹ {fmtCurrency(totals.total)}</span>

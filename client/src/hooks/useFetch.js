@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { authHeaders } from '../utils/authHeader.js';
 
-export function useFetch(path) {
+export function useFetch(path, options = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -12,7 +13,9 @@ export function useFetch(path) {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch(`/api${path}`);
+        const res = await fetch(`/api${path}`, {
+          headers: authHeaders(options.headers),
+        });
         const json = await res.json().catch(() => null);
         if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
         if (!cancelled) setData(json);

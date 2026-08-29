@@ -12,7 +12,9 @@ import tasksRouter from './routes/tasks.routes.js';
 import settingsRouter from './routes/settings.routes.js';
 import rolesRouter from './routes/roles.routes.js';
 import dashboardRouter from './routes/dashboard.routes.js';
+import teamRouter from './routes/team.routes.js';
 import authRouter from './routes/auth.routes.js';
+import { requireAuth } from './middleware/auth.middleware.js';
 import { notFound, errorHandler } from './middleware/error.middleware.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -25,15 +27,19 @@ app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json({ limit: '5mb' }));
 
 app.use('/api/health', healthRouter);
-app.use('/api/clients', clientsRouter);
-app.use('/api/services', servicesRouter);
-app.use('/api/engagements', engagementsRouter);
-app.use('/api/invoices', invoicesRouter);
-app.use('/api/tasks', tasksRouter);
-app.use('/api/settings', settingsRouter);
-app.use('/api/roles', rolesRouter);
-app.use('/api/dashboard', dashboardRouter);
 app.use('/api/auth', authRouter);
+
+// All data routes require a valid Bearer token (tenant scoping is derived
+// from the authenticated user). Order matters: auth/health stay public.
+app.use('/api/clients', requireAuth, clientsRouter);
+app.use('/api/services', requireAuth, servicesRouter);
+app.use('/api/engagements', requireAuth, engagementsRouter);
+app.use('/api/invoices', requireAuth, invoicesRouter);
+app.use('/api/tasks', requireAuth, tasksRouter);
+app.use('/api/settings', requireAuth, settingsRouter);
+app.use('/api/roles', requireAuth, rolesRouter);
+app.use('/api/dashboard', requireAuth, dashboardRouter);
+app.use('/api/team', requireAuth, teamRouter);
 
 // Serve the built React client (static files + SPA fallback). This lets a single
 // service host both the API and the frontend under one origin.

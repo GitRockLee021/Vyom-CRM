@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMockNav } from '../hooks/useMockNav.js';
+import { usePerm } from '../hooks/usePerm.js';
 import { useSettings } from '../hooks/useSettings.js';
+import { authHeaders } from '../utils/authHeader.js';
 
 const EMPTY_SETTINGS = {
   company_name: '',
@@ -24,6 +26,8 @@ const labelCls = 'block font-label-md text-label-md text-on-surface-variant mb-1
 export default function Settings() {
   const handleNav = useMockNav();
   const settings = useSettings();
+  const can = usePerm();
+  const editable = can('settings.edit');
   const [form, setForm] = useState(EMPTY_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -34,7 +38,7 @@ export default function Settings() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/settings');
+        const res = await fetch('/api/settings', { headers: authHeaders() });
         const data = await res.json().catch(() => null);
         if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
         if (!cancelled) setForm({ ...EMPTY_SETTINGS, ...data });
@@ -59,7 +63,7 @@ export default function Settings() {
     try {
       const res = await fetch('/api/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(form),
       });
       const data = await res.json().catch(() => null);
@@ -124,11 +128,16 @@ export default function Settings() {
                   Company Information
                 </a>
               </li>
-              <li>
-                <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                  Roles &amp; Permissions
-                </a>
-              </li>
+<li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Team Members
+                    </a>
+                  </li>
+                  <li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Roles &amp; Permissions
+                    </a>
+                  </li>
             </ul>
           </div>
         </nav>
@@ -316,10 +325,17 @@ export default function Settings() {
                     </div>
                   </div>
                   <div className="px-container-padding py-3 bg-surface-container-low border-t border-outline-variant flex justify-end">
-                    <button type="submit" disabled={saving} className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px]">save</span>
-                      {saving ? 'Saving…' : 'Save Company Settings'}
-                    </button>
+                    {editable ? (
+                      <button type="submit" disabled={saving} className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px]">save</span>
+                        {saving ? 'Saving…' : 'Save Company Settings'}
+                      </button>
+                    ) : (
+                      <span className="font-body-md text-body-md text-on-surface-variant flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px]">lock</span>
+                        You have read-only access to settings.
+                      </span>
+                    )}
                   </div>
                 </form>
               )}

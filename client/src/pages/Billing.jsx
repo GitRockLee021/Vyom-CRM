@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { useMockNav } from '../hooks/useMockNav.js';
+import { usePerm } from '../hooks/usePerm.js';
 import { useSettings } from '../hooks/useSettings.js';
 import InvoiceDocument from '../components/InvoiceDocument.jsx';
 
 const PAGE_SIZE = 10;
-const TENANT_ID = 1;
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All' },
@@ -39,7 +39,8 @@ export default function Billing() {
   const navigate = useNavigate();
   const handleNav = useMockNav();
   const settings = useSettings();
-  const { data, error, loading } = useFetch(`/invoices?tenant_id=${TENANT_ID}`);
+  const can = usePerm();
+  const { data, error, loading } = useFetch('/invoices');
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -62,7 +63,7 @@ export default function Billing() {
     let paid = 0;
     let unpaid = 0;
     for (const inv of invoices) {
-      const gst = Number(inv.gst_rate) || 18;
+      const gst = Number(inv.gst_rate) || 0;
       const total = Number(inv.amount) * (1 + gst / 100);
       if (inv.status === 'paid') {
         paid += 1;
@@ -162,11 +163,16 @@ export default function Billing() {
                   Company Information
                 </a>
               </li>
-              <li>
-                <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                  Roles &amp; Permissions
-                </a>
-              </li>
+<li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Team Members
+                    </a>
+                  </li>
+                  <li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Roles &amp; Permissions
+                    </a>
+                  </li>
             </ul>
           </div>
         </nav>
@@ -226,22 +232,26 @@ export default function Billing() {
                 <p className="font-body-md text-body-md text-on-surface-variant mt-1">Manage and track your client billing.</p>
               </div>
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => navigate('/payments/new')}
-                  className="border border-outline-variant text-on-surface font-label-md text-label-md py-2.5 px-5 rounded flex items-center gap-2 hover:bg-surface-container-low transition-colors whitespace-nowrap"
-                >
-                  <span className="material-symbols-outlined text-sm">payments</span>
-                  Record Payment
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate('/invoices/new')}
-                  className="bg-primary text-on-primary font-label-md text-label-md py-2.5 px-5 rounded flex items-center gap-2 hover:opacity-90 transition-opacity whitespace-nowrap"
-                >
-                  <span className="material-symbols-outlined text-sm">add</span>
-                  Create Invoice
-                </button>
+                {can('billing.record_payment') && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/payments/new')}
+                    className="border border-outline-variant text-on-surface font-label-md text-label-md py-2.5 px-5 rounded flex items-center gap-2 hover:bg-surface-container-low transition-colors whitespace-nowrap"
+                  >
+                    <span className="material-symbols-outlined text-sm">payments</span>
+                    Record Payment
+                  </button>
+                )}
+                {can('billing.create') && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/invoices/new')}
+                    className="bg-primary text-on-primary font-label-md text-label-md py-2.5 px-5 rounded flex items-center gap-2 hover:opacity-90 transition-opacity whitespace-nowrap"
+                  >
+                    <span className="material-symbols-outlined text-sm">add</span>
+                    Create Invoice
+                  </button>
+                )}
               </div>
             </div>
 
@@ -354,7 +364,7 @@ export default function Billing() {
                       </tr>
                     )}
                     {!loading && !error && rows.map((inv, i) => {
-                      const gst = Number(inv.gst_rate) || 18;
+                      const gst = Number(inv.gst_rate) || 0;
                       const total = Number(inv.amount) * (1 + gst / 100);
                       const isOverdue = inv.status === 'overdue';
                       return (
@@ -370,13 +380,17 @@ export default function Billing() {
                             </a>
                           </td>
                           <td className="p-4 font-medium text-on-surface">
-                            <button
-                              type="button"
-                              className="cursor-pointer hover:text-secondary transition-colors"
-                              onClick={() => navigate(`/clients/${inv.client_id}/edit`)}
-                            >
-                              {inv.client_name}
-                            </button>
+                            {can('clients.edit') ? (
+                              <button
+                                type="button"
+                                className="cursor-pointer hover:text-secondary transition-colors"
+                                onClick={() => navigate(`/clients/${inv.client_id}/edit`)}
+                              >
+                                {inv.client_name}
+                              </button>
+                            ) : (
+                              <span className="text-on-surface">{inv.client_name}</span>
+                            )}
                           </td>
                           <td className="p-4 font-data-mono text-data-mono text-right">{fmtCurrency(total)}</td>
                           <td className="p-4 text-on-surface-variant">{fmtDate(inv.issued_date)}</td>
@@ -397,15 +411,17 @@ export default function Billing() {
                               >
                                 <span className="material-symbols-outlined text-[18px]">visibility</span>
                               </a>
-                              <button
-                                type="button"
-                                disabled={inv.status === 'paid'}
-                                className={`text-on-surface-variant transition-colors ${inv.status === 'paid' ? 'opacity-40 cursor-not-allowed' : 'hover:text-primary'}`}
-                                title={inv.status === 'paid' ? 'Paid invoices cannot be edited' : 'Edit'}
-                                onClick={() => navigate(`/invoices/${inv.id}/edit`)}
-                              >
-                                <span className="material-symbols-outlined text-[18px]">edit</span>
-                              </button>
+                              {can('billing.edit') && (
+                                <button
+                                  type="button"
+                                  disabled={inv.status === 'paid'}
+                                  className={`text-on-surface-variant transition-colors ${inv.status === 'paid' ? 'opacity-40 cursor-not-allowed' : 'hover:text-primary'}`}
+                                  title={inv.status === 'paid' ? 'Paid invoices cannot be edited' : 'Edit'}
+                                  onClick={() => navigate(`/invoices/${inv.id}/edit`)}
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">edit</span>
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="text-on-surface-variant hover:text-primary transition-colors"

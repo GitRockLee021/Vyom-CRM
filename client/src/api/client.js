@@ -1,12 +1,14 @@
+import { authHeaders } from '../utils/authHeader.js';
+
 const BASE_URL = '/api';
 
 async function request(path, { method = 'GET', body, headers = {} } = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
-    headers: {
+    headers: authHeaders({
       'Content-Type': 'application/json',
       ...headers,
-    },
+    }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 

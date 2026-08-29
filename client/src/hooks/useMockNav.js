@@ -8,6 +8,7 @@ const ROUTE_BY_LABEL = {
   settings: '/settings',
   'company information': '/settings',
   'company details': '/settings',
+  'team members': '/settings/team',
   'roles & permissions': '/settings/roles',
 };
 

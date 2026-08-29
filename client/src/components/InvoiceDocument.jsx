@@ -20,7 +20,8 @@ const FONT = "Nunito, 'Segoe UI', sans-serif";
 
 export default function InvoiceDocument({ invoice, company }) {
   const subtotal = Number(invoice.amount) || 0;
-  const gstRate = Number(invoice.gst_rate) || 18;
+  const gstRate = Number(invoice.gst_rate) || 0;
+  const gstEnabled = gstRate > 0;
   const gstAmount = subtotal * (gstRate / 100);
   const total = subtotal + gstAmount;
   const lineItems = parseLineItems(invoice.notes) || [
@@ -153,7 +154,7 @@ export default function InvoiceDocument({ invoice, company }) {
             {from.address.split('\n').map((line, i) => line.trim() && <div key={i}>{line}</div>)}
             {(from.gstin || from.pan || from.email) && (
               <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.variant}` }}>
-                {from.gstin && <div><span style={{ fontWeight: 700, color: C.onSurface }}>GSTIN:</span> {from.gstin}</div>}
+                {gstEnabled && from.gstin && <div><span style={{ fontWeight: 700, color: C.onSurface }}>GSTIN:</span> {from.gstin}</div>}
                 {from.pan && <div><span style={{ fontWeight: 700, color: C.onSurface }}>PAN:</span> {from.pan}</div>}
                 {from.email && <div><span style={{ fontWeight: 700, color: C.onSurface }}>Email:</span> {from.email}</div>}
                 {from.phone && <div><span style={{ fontWeight: 700, color: C.onSurface }}>Phone:</span> {from.phone}</div>}
@@ -169,7 +170,7 @@ export default function InvoiceDocument({ invoice, company }) {
           <div style={body}>
             {clientAddress.length ? clientAddress.map((line, i) => <div key={i}>{line}</div>) : <div>—</div>}
             <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(182,196,255,0.5)' }}>
-              {invoice.client_gstin && <div><span style={{ fontWeight: 700, color: C.onSurface }}>GSTIN:</span> {invoice.client_gstin}</div>}
+              {invoice.client_gstin && gstEnabled && <div><span style={{ fontWeight: 700, color: C.onSurface }}>GSTIN:</span> {invoice.client_gstin}</div>}
               {invoice.contact_person && <div><span style={{ fontWeight: 700, color: C.onSurface }}>Attn:</span> {invoice.contact_person}</div>}
             </div>
           </div>
@@ -224,7 +225,7 @@ export default function InvoiceDocument({ invoice, company }) {
             <span style={{ color: C.onSurfaceVariant }}>Subtotal</span>
             <span style={{ fontWeight: 600, color: C.onSurface }}>₹ {fmtCurrency(subtotal)}</span>
           </div>
-          {isSameState ? (
+          {gstEnabled && (isSameState ? (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, fontSize: 11.5 }}>
                 <span style={{ color: C.onSurfaceVariant }}>CGST ({gstRate / 2}%)</span>
@@ -240,7 +241,7 @@ export default function InvoiceDocument({ invoice, company }) {
               <span style={{ color: C.onSurfaceVariant }}>IGST ({gstRate}%)</span>
               <span style={{ fontWeight: 600, color: C.onSurface }}>₹ {fmtCurrency(gstAmount)}</span>
             </div>
-          )}
+          ))}
           <div style={{ borderTop: `2px solid ${C.primaryContainer}33`, marginTop: 8, paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.primaryContainer, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Grand Total</div>

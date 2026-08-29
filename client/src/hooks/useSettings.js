@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { authHeaders } from '../utils/authHeader.js';
 
 let cached = null;
 let promise = null;
@@ -9,7 +10,7 @@ export function useSettings() {
   useEffect(() => {
     if (cached) { setSettings(cached); return; }
     if (!promise) {
-      promise = fetch('/api/settings')
+      promise = fetch('/api/settings', { headers: authHeaders() })
         .then((r) => r.json().catch(() => null))
         .then((s) => { cached = s || {}; return cached; })
         .catch(() => { cached = {}; return cached; });

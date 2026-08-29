@@ -22,3 +22,6 @@ services:
       - key: CLIENT_URL
         sync: false
         comment: Same as CORS_ORIGIN; used for password-reset links
+      - key: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
+        value: "1"
+        comment: Playwright is only used for local E2E; don't download browsers in the build

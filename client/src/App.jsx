@@ -8,8 +8,10 @@ import InvoiceView from './pages/InvoiceView.jsx';
 import RecordPayment from './pages/RecordPayment.jsx';
 import Settings from './pages/Settings.jsx';
 import Roles from './pages/Roles.jsx';
+import Team from './pages/Team.jsx';
 import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
+import AcceptInvite from './pages/AcceptInvite.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import { RequireAuth, RedirectIfAuthed } from './components/RouteGuards.jsx';
@@ -49,6 +51,7 @@ export default function App() {
           </RedirectIfAuthed>
         }
       />
+      <Route path="/invite" element={<AcceptInvite />} />
 
       <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
       <Route path="/clients" element={<RequireAuth><Clients /></RequireAuth>} />
@@ -62,6 +65,7 @@ export default function App() {
       <Route path="/invoices/:id/pay" element={<RequireAuth><RecordPayment /></RequireAuth>} />
       <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
       <Route path="/settings/roles" element={<RequireAuth><Roles /></RequireAuth>} />
+      <Route path="/settings/team" element={<RequireAuth><Team /></RequireAuth>} />
 
       <Route path="*" element={<RequireAuth><Dashboard /></RequireAuth>} />
     </Routes>

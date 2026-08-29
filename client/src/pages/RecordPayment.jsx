@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { useMockNav } from '../hooks/useMockNav.js';
+import { usePerm } from '../hooks/usePerm.js';
 import { useSettings } from '../hooks/useSettings.js';
-
-const TENANT_ID = 1;
+import AccessDenied from '../components/AccessDenied.jsx';
+import { authHeaders } from '../utils/authHeader.js';
 
 const PAYMENT_METHODS = [
   { value: 'bank_transfer', label: 'Bank Transfer' },
@@ -36,7 +37,7 @@ function fmtDate(d) {
 async function api(method, path, body) {
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers: authHeaders(body !== undefined ? { 'Content-Type': 'application/json' } : undefined),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (res.status === 204) return null;
@@ -49,10 +50,11 @@ export default function RecordPayment() {
   const navigate = useNavigate();
   const handleNav = useMockNav();
   const settings = useSettings();
+  const can = usePerm();
   const { id } = useParams();
   const isSingle = Boolean(id);
 
-  const { data: clientsData } = useFetch(`/clients?tenant_id=${TENANT_ID}`);
+  const { data: clientsData } = useFetch('/clients');
   const clients = Array.isArray(clientsData) ? clientsData : [];
 
   const [invoice, setInvoice] = useState(null);
@@ -77,7 +79,7 @@ export default function RecordPayment() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/invoices/${id}`);
+        const res = await fetch(`/api/invoices/${id}`, { headers: authHeaders() });
         const inv = await res.json().catch(() => null);
         if (!res.ok) throw new Error(inv?.error || `Request failed (${res.status})`);
         if (cancelled) return;
@@ -98,7 +100,7 @@ export default function RecordPayment() {
     (async () => {
       setLoadingClientInvoices(true);
       try {
-        const res = await fetch(`/api/invoices?client_id=${selectedClient.id}&tenant_id=${TENANT_ID}`);
+        const res = await fetch(`/api/invoices?client_id=${selectedClient.id}`, { headers: authHeaders() });
         const list = await res.json().catch(() => null);
         if (!res.ok) throw new Error(list?.error || `Request failed (${res.status})`);
         if (cancelled) return;
@@ -186,6 +188,10 @@ export default function RecordPayment() {
   const inputCls = 'w-full border border-outline-variant rounded px-3 py-2 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors';
   const labelCls = 'block font-label-md text-label-md text-on-surface-variant mb-1';
 
+  if (!can('billing.record_payment')) {
+    return <AccessDenied message="You don't have permission to record payments." />;
+  }
+
   return (
     <div className="bg-surface font-body-md text-on-surface h-screen flex overflow-hidden" onClick={handleNav}>
       {/* SideNavBar */}
@@ -223,11 +229,16 @@ export default function RecordPayment() {
                   Company Information
                 </a>
               </li>
-              <li>
-                <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                  Roles &amp; Permissions
-                </a>
-              </li>
+<li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Team Members
+                    </a>
+                  </li>
+                  <li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Roles &amp; Permissions
+                    </a>
+                  </li>
             </ul>
           </div>
         </nav>

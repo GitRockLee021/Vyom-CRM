@@ -23,3 +23,7 @@ Thumbs.db
 
 # Uploads (user documents)
 uploads/
+
+# Playwright
+test-results/
+playwright-report/

@@ -10,7 +10,7 @@ export default function Signup() {
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '', company_name: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -40,6 +40,7 @@ export default function Signup() {
         full_name: form.full_name,
         email: form.email,
         password: form.password,
+        company_name: form.company_name,
       });
       navigate('/', { replace: true });
     } catch (err) {
@@ -62,9 +63,9 @@ export default function Signup() {
         </div>
 
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-[0_2px_4px_rgba(0,0,0,0.05)]">
-          <h2 className="font-headline-md text-headline-md text-on-surface mb-1">Create your account</h2>
+          <h2 className="font-headline-md text-headline-md text-on-surface mb-1">Create your workspace</h2>
           <p className="font-body-md text-body-md text-on-surface-variant mb-6">
-            The first account created becomes the administrator.
+            Your first account sets up a new workspace and becomes its administrator.
           </p>
 
           {error && (
@@ -74,6 +75,18 @@ export default function Signup() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-stack-md">
+            <div>
+              <label className={labelCls} htmlFor="company_name">Firm / company name</label>
+              <input
+                id="company_name"
+                type="text"
+                className={inputCls}
+                placeholder="e.g. Vyom & Associates"
+                value={form.company_name}
+                onChange={(e) => setField('company_name', e.target.value)}
+              />
+            </div>
+
             <div>
               <label className={labelCls} htmlFor="full_name">Full name</label>
               <input

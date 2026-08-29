@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { useMockNav } from '../hooks/useMockNav.js';
+import { usePerm } from '../hooks/usePerm.js';
 import { useSettings } from '../hooks/useSettings.js';
+import { authHeaders } from '../utils/authHeader.js';
 import { downloadClientsTemplate } from '../utils/xlsxTemplate.js';
 import * as XLSX from 'xlsx';
 
@@ -51,7 +53,7 @@ const EMPTY_FORM = { name: '', client_type: 'individual', email: '', phone: '', 
 async function api(method, path, body) {
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers: authHeaders(body !== undefined ? { 'Content-Type': 'application/json' } : undefined),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (res.status === 204) return null;
@@ -96,6 +98,7 @@ export default function Clients() {
   const navigate = useNavigate();
   const handleNav = useMockNav();
   const settings = useSettings();
+  const can = usePerm();
   const { data, error, loading, reload } = useFetch('/clients');
 
   const [search, setSearch] = useState('');
@@ -346,11 +349,16 @@ export default function Clients() {
                   Company Information
                 </a>
               </li>
-              <li>
-                <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                  Roles &amp; Permissions
-                </a>
-              </li>
+<li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Team Members
+                    </a>
+                  </li>
+                  <li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Roles &amp; Permissions
+                    </a>
+                  </li>
             </ul>
           </div>
         </nav>
@@ -440,15 +448,17 @@ export default function Clients() {
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                 </select>
-                <button
-                  type="button"
-                  disabled={importing}
-                  className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors text-on-surface flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => setImportOpen(true)}
-                >
-                  <span className="material-symbols-outlined text-[18px]">upload</span>
-                  {importing ? 'Importing…' : 'Import'}
-                </button>
+                {can('clients.create') && (
+                  <button
+                    type="button"
+                    disabled={importing}
+                    className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors text-on-surface flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => setImportOpen(true)}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">upload</span>
+                    {importing ? 'Importing…' : 'Import'}
+                  </button>
+                )}
                 <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={handleImportFile} />
                 <button
                   type="button"
@@ -458,14 +468,16 @@ export default function Clients() {
                   <span className="material-symbols-outlined text-[18px]">download</span>
                   Export CSV
                 </button>
-                <button
-                  type="button"
-                  className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity flex items-center gap-2"
-                  onClick={() => navigate('/clients/new')}
-                >
-                  <span className="material-symbols-outlined text-[18px]">add</span>
-                  Add Client
-                </button>
+                {can('clients.create') && (
+                  <button
+                    type="button"
+                    className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity flex items-center gap-2"
+                    onClick={() => navigate('/clients/new')}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">add</span>
+                    Add Client
+                  </button>
+                )}
               </div>
             </div>
 
@@ -511,9 +523,13 @@ export default function Clients() {
                     {!loading && !error && rows.map((client, i) => (
                       <tr key={client.id} className={`hover:bg-surface-container-low transition-colors group${i % 2 === 1 ? ' bg-[#F9FAFB]' : ''}`}>
                         <td className="px-6 py-4">
-                          <button type="button" className="text-left cursor-pointer hover:text-secondary transition-colors" onClick={() => navigate(`/clients/${client.id}/edit`)}>
-                            {client.name}
-                          </button>
+                          {can('clients.edit') ? (
+                            <button type="button" className="text-left cursor-pointer hover:text-secondary transition-colors" onClick={() => navigate(`/clients/${client.id}/edit`)}>
+                              {client.name}
+                            </button>
+                          ) : (
+                            <span className="text-left">{client.name}</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-on-surface-variant">{typeLabel(client.client_type)}</td>
                         <td className="px-6 py-4">{client.email || '—'}</td>
@@ -524,15 +540,16 @@ export default function Clients() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button type="button" title="Edit" className="text-on-surface-variant hover:text-secondary" onClick={() => navigate(`/clients/${client.id}/edit`)}>
-                            <span className="material-symbols-outlined text-[20px]">visibility</span>
-                          </button>
-                          <button type="button" title="Edit" className="text-on-surface-variant hover:text-secondary" onClick={() => navigate(`/clients/${client.id}/edit`)}>
-                            <span className="material-symbols-outlined text-[20px]">edit</span>
-                          </button>
-                          <button type="button" title="Delete" className="text-on-surface-variant hover:text-error" onClick={() => setDeleteTarget(client)}>
-                            <span className="material-symbols-outlined text-[20px]">delete</span>
-                          </button>
+                          {can('clients.edit') && (
+                            <button type="button" title="Edit" className="text-on-surface-variant hover:text-secondary" onClick={() => navigate(`/clients/${client.id}/edit`)}>
+                              <span className="material-symbols-outlined text-[20px]">edit</span>
+                            </button>
+                          )}
+                          {can('clients.delete') && (
+                            <button type="button" title="Delete" className="text-on-surface-variant hover:text-error" onClick={() => setDeleteTarget(client)}>
+                              <span className="material-symbols-outlined text-[20px]">delete</span>
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

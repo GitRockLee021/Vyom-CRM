@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query } from '../config/db.js';
+import { requirePerm } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
@@ -7,8 +8,9 @@ function withGst(amount, gstRate) {
   return Number(amount) * (1 + Number(gstRate ?? 0) / 100);
 }
 
-router.get('/summary', async (req, res, next) => {
+router.get('/summary', requirePerm('billing.view'), async (req, res, next) => {
   try {
+    const tenantId = req.user.tenant_id;
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
@@ -16,10 +18,11 @@ router.get('/summary', async (req, res, next) => {
     // --- Clients ---
     const clients = await query(
       `SELECT COUNT(*)::int AS total,
-              COUNT(*) FILTER (WHERE created_at >= $1)::int AS this_month,
-              COUNT(*) FILTER (WHERE created_at >= $2 AND created_at < $1)::int AS last_month
-       FROM clients`,
-      [monthStart, prevMonthStart],
+              COUNT(*) FILTER (WHERE created_at >= $2)::int AS this_month,
+              COUNT(*) FILTER (WHERE created_at >= $3 AND created_at < $2)::int AS last_month
+       FROM clients
+       WHERE tenant_id = $1`,
+      [tenantId, monthStart, prevMonthStart],
     );
     const totalClients = clients.rows[0].total;
     const thisMonthClients = clients.rows[0].this_month;
@@ -36,8 +39,8 @@ router.get('/summary', async (req, res, next) => {
               COUNT(DISTINCT i.client_id)::int AS client_count
        FROM invoices i
        JOIN payments p ON p.invoice_id = i.id
-       WHERE p.paid_at >= $1 AND i.status IN ('paid', 'sent', 'overdue')`,
-      [monthStart],
+       WHERE p.paid_at >= $2 AND i.status IN ('paid', 'sent', 'overdue') AND i.tenant_id = $1`,
+      [tenantId, monthStart],
     );
     const revenueMtd = Number(revenueRows.rows[0].revenue);
     const revenueClientCount = revenueRows.rows[0].client_count;
@@ -46,7 +49,8 @@ router.get('/summary', async (req, res, next) => {
     const invoices = await query(`
       SELECT i.id, i.amount, i.gst_rate, i.status, i.due_date
       FROM invoices i
-    `);
+      WHERE i.tenant_id = $1
+    `, [tenantId]);
 
     let pendingTotal = 0;
     let pending30 = 0;

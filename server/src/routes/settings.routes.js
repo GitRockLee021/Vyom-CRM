@@ -1,10 +1,9 @@
 import { Router } from 'express';
 import { query } from '../config/db.js';
 import { httpError } from '../utils/http-error.js';
+import { requirePerm } from '../middleware/auth.middleware.js';
 
 const router = Router();
-
-const TENANT_ID = 1;
 
 const FIELDS = [
   'company_name', 'logo_url', 'address', 'state', 'phone', 'email', 'pan', 'gst', 'invoice_prefix',
@@ -13,11 +12,11 @@ const FIELDS = [
 
 const TEXT_FIELDS = ['company_name', 'address', 'phone', 'email', 'tax_id', 'invoice_prefix', 'logo_url'];
 
-router.get('/', async (_req, res, next) => {
+router.get('/', requirePerm('settings.view'), async (req, res, next) => {
   try {
     const { rows } = await query(
       `SELECT ${FIELDS.join(', ')} FROM settings WHERE tenant_id = $1 LIMIT 1`,
-      [TENANT_ID],
+      [req.user.tenant_id],
     );
     if (!rows.length) {
       return res.json({
@@ -32,8 +31,9 @@ router.get('/', async (_req, res, next) => {
   }
 });
 
-router.put('/', async (req, res, next) => {
+router.put('/', requirePerm('settings.edit'), async (req, res, next) => {
   try {
+    const tenantId = req.user.tenant_id;
     const data = {};
     for (const field of FIELDS) {
       if (req.body[field] !== undefined) data[field] = req.body[field];
@@ -44,7 +44,7 @@ router.put('/', async (req, res, next) => {
 
     const existing = await query(
       'SELECT id FROM settings WHERE tenant_id = $1 LIMIT 1',
-      [TENANT_ID],
+      [tenantId],
     );
 
     if (existing.rows.length) {
@@ -57,14 +57,14 @@ router.put('/', async (req, res, next) => {
         i += 1;
       }
       setClauses.push(`updated_at = NOW()`);
-      values.push(TENANT_ID);
+      values.push(tenantId);
       await query(
         `UPDATE settings SET ${setClauses.join(', ')} WHERE tenant_id = $${i}`,
         values,
       );
     } else {
       const cols = ['tenant_id', ...Object.keys(data)];
-      const vals = [TENANT_ID, ...Object.values(data)];
+      const vals = [tenantId, ...Object.values(data)];
       const placeholders = cols.map((_, idx) => `$${idx + 1}`).join(', ');
       await query(
         `INSERT INTO settings (${cols.join(', ')}) VALUES (${placeholders})`,
@@ -74,7 +74,7 @@ router.put('/', async (req, res, next) => {
 
     const { rows } = await query(
       `SELECT ${FIELDS.join(', ')} FROM settings WHERE tenant_id = $1 LIMIT 1`,
-      [TENANT_ID],
+      [tenantId],
     );
     res.json(rows[0] || {});
   } catch (err) {

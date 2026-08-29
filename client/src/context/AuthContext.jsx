@@ -68,8 +68,14 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const register = async ({ full_name, email, password }) => {
-    const data = await authRequest('/register', { full_name, email, password });
+  const register = async ({ full_name, email, password, company_name }) => {
+    const data = await authRequest('/register', { full_name, email, password, company_name });
+    applyAuth(data);
+    return data.user;
+  };
+
+  const acceptInvite = async ({ token, full_name, email, password }) => {
+    const data = await authRequest('/accept-invite', { token, full_name, email, password });
     applyAuth(data);
     return data.user;
   };
@@ -89,7 +95,7 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ user, token, initializing, isAuthenticated: Boolean(user), login, register, logout }),
+    () => ({ user, token, initializing, isAuthenticated: Boolean(user), login, register, acceptInvite, logout }),
     [user, token, initializing],
   );
 

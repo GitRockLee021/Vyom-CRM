@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { query } from '../config/db.js';
 import { httpError } from '../utils/http-error.js';
+import { assertUserInTenant } from '../utils/member-check.js';
+import { requirePerm } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
@@ -32,12 +34,13 @@ function validate(data, { partial = false } = {}) {
 }
 
 // GET /api/tasks?engagement_id=&assigned_to=&status=
-router.get('/', async (req, res, next) => {
+router.get('/', requirePerm('engagements.view'), async (req, res, next) => {
   try {
     const { engagement_id, assigned_to, status } = req.query;
     const conditions = [];
-    const params = [];
+    const params = [req.user.tenant_id];
 
+    conditions.push('t.tenant_id = $1');
     for (const [field, value] of [['engagement_id', engagement_id], ['assigned_to', assigned_to], ['status', status]]) {
       if (value) {
         params.push(value);
@@ -57,9 +60,12 @@ router.get('/', async (req, res, next) => {
 });
 
 // GET /api/tasks/:id
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requirePerm('engagements.view'), async (req, res, next) => {
   try {
-    const { rows } = await query(`${BASE_SELECT} WHERE t.id = $1`, [req.params.id]);
+    const { rows } = await query(`${BASE_SELECT} WHERE t.id = $1 AND t.tenant_id = $2`, [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     if (!rows[0]) throw httpError(404, 'Task not found');
     res.json(rows[0]);
   } catch (err) {
@@ -68,10 +74,12 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /api/tasks
-router.post('/', async (req, res, next) => {
+router.post('/', requirePerm('engagements.create'), async (req, res, next) => {
   try {
     const data = pickFields(req.body || {});
     validate(data);
+    if (data.assigned_to) await assertUserInTenant(data.assigned_to, req.user.tenant_id);
+    data.tenant_id = req.user.tenant_id;
 
     const keys = Object.keys(data);
     const placeholders = keys.map((_, i) => `$${i + 1}`);
@@ -82,7 +90,10 @@ router.post('/', async (req, res, next) => {
       Object.values(data)
     );
 
-    const { rows } = await query(`${BASE_SELECT} WHERE t.id = $1`, [inserted.rows[0].id]);
+    const { rows } = await query(
+      `${BASE_SELECT} WHERE t.id = $1 AND t.tenant_id = $2`,
+      [inserted.rows[0].id, req.user.tenant_id]
+    );
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.code === '23503') err.status = 400;
@@ -91,24 +102,28 @@ router.post('/', async (req, res, next) => {
 });
 
 // PUT /api/tasks/:id
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requirePerm('engagements.edit'), async (req, res, next) => {
   try {
     const data = pickFields(req.body || {});
     validate(data, { partial: true });
+    if (data.assigned_to) await assertUserInTenant(data.assigned_to, req.user.tenant_id);
 
     const keys = Object.keys(data);
     if (!keys.length) throw httpError(400, 'No valid fields provided');
 
     const sets = keys.map((key, i) => `${key} = $${i + 1}`);
-    const values = [...Object.values(data), req.params.id];
+    const values = [...Object.values(data), req.params.id, req.user.tenant_id];
 
     const updated = await query(
-      `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING id`,
+      `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING id`,
       values
     );
     if (!updated.rows[0]) throw httpError(404, 'Task not found');
 
-    const { rows } = await query(`${BASE_SELECT} WHERE t.id = $1`, [updated.rows[0].id]);
+    const { rows } = await query(
+      `${BASE_SELECT} WHERE t.id = $1 AND t.tenant_id = $2`,
+      [updated.rows[0].id, req.user.tenant_id]
+    );
     res.json(rows[0]);
   } catch (err) {
     next(err);
@@ -116,9 +131,12 @@ router.put('/:id', async (req, res, next) => {
 });
 
 // DELETE /api/tasks/:id
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requirePerm('engagements.delete'), async (req, res, next) => {
   try {
-    const { rowCount } = await query('DELETE FROM tasks WHERE id = $1', [req.params.id]);
+    const { rowCount } = await query('DELETE FROM tasks WHERE id = $1 AND tenant_id = $2', [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     if (!rowCount) throw httpError(404, 'Task not found');
     res.status(204).end();
   } catch (err) {

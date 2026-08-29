@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useMockNav } from '../hooks/useMockNav.js';
+import { usePerm } from '../hooks/usePerm.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useFetch } from '../hooks/useFetch.js';
+import { authHeaders } from '../utils/authHeader.js';
 
 const PERMISSION_MODULES = [
   {
@@ -23,7 +25,19 @@ const PERMISSION_MODULES = [
       { key: 'view', label: 'View Invoices', desc: 'Read access to invoice records.' },
       { key: 'create', label: 'Create Invoices', desc: 'Issue new invoice records.' },
       { key: 'edit', label: 'Edit Invoices', desc: 'Modify existing invoice data.' },
+      { key: 'delete', label: 'Delete Invoices', desc: 'Permanently remove invoice records.', danger: true },
       { key: 'record_payment', label: 'Record Payments', desc: 'Apply and track payments.' },
+    ],
+  },
+  {
+    key: 'engagements',
+    title: 'Engagements & Work',
+    icon: 'task_alt',
+    permissions: [
+      { key: 'view', label: 'View Engagements', desc: 'Read access to engagements, tasks and services.' },
+      { key: 'create', label: 'Create Engagements', desc: 'Create engagements, tasks and services.' },
+      { key: 'edit', label: 'Edit Engagements', desc: 'Modify engagements, tasks and services.' },
+      { key: 'delete', label: 'Delete Engagements', desc: 'Permanently remove engagements, tasks and services.', danger: true },
     ],
   },
   {
@@ -65,6 +79,8 @@ function Toggle({ checked, onChange, disabled, danger }) {
 export default function Roles() {
   const handleNav = useMockNav();
   const settings = useSettings();
+  const can = usePerm();
+  const canManageRoles = can('settings.manage_roles');
   const { data: roles, loading, reload } = useFetch('/roles');
   const [selectedId, setSelectedId] = useState(null);
   const [perms, setPerms] = useState({});
@@ -112,7 +128,7 @@ export default function Roles() {
     try {
       const res = await fetch(`/api/roles/${selectedId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ permissions: perms }),
       });
       const data = await res.json().catch(() => null);
@@ -150,13 +166,14 @@ export default function Roles() {
       if (modal.mode === 'add') {
         const res = await fetch('/api/roles', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             name: draft.name.trim(),
             description: draft.description.trim(),
             permissions: {
               clients: { view: false, create: false, edit: false, delete: false },
-              billing: { view: false, create: false, edit: false, record_payment: false },
+              billing: { view: false, create: false, edit: false, delete: false, record_payment: false },
+              engagements: { view: false, create: false, edit: false, delete: false },
               settings: { view: false, edit: false, manage_roles: false },
             },
           }),
@@ -169,7 +186,7 @@ export default function Roles() {
       } else {
         const res = await fetch(`/api/roles/${modal.role.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ name: draft.name.trim(), description: draft.description.trim() }),
         });
         const data = await res.json().catch(() => null);
@@ -187,7 +204,7 @@ export default function Roles() {
     if (role.is_default) return;
     if (!window.confirm(`Delete role "${role.name}"?`)) return;
     try {
-      const res = await fetch(`/api/roles/${role.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/roles/${role.id}`, { method: 'DELETE', headers: authHeaders() });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error || `Request failed (${res.status})`);
@@ -237,6 +254,11 @@ export default function Roles() {
               <li>
                 <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
                   Company Information
+                </a>
+              </li>
+              <li>
+                <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                  Team Members
                 </a>
               </li>
               <li>
@@ -310,10 +332,12 @@ export default function Roles() {
                 <h2 className="font-headline-lg text-headline-lg text-on-surface mb-1">Roles &amp; Permissions</h2>
                 <p className="font-body-lg text-body-lg text-on-surface-variant">Manage user access levels and system permissions.</p>
               </div>
-              <button type="button" onClick={openAdd} className="flex items-center gap-2 bg-primary text-on-primary font-label-md text-label-md px-5 py-2.5 rounded-lg hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm self-start sm:self-auto border border-transparent whitespace-nowrap">
-                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>add</span>
-                Add New Role
-              </button>
+              {canManageRoles && (
+                <button type="button" onClick={openAdd} className="flex items-center gap-2 bg-primary text-on-primary font-label-md text-label-md px-5 py-2.5 rounded-lg hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm self-start sm:self-auto border border-transparent whitespace-nowrap">
+                  <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>add</span>
+                  Add New Role
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
@@ -356,10 +380,12 @@ export default function Roles() {
                                 </td>
                                 <td className="px-5 py-4 hidden sm:table-cell text-on-surface-variant">{role.user_count}</td>
                                 <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                  {canManageRoles && (
                                   <button type="button" className="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors p-1" onClick={() => openEdit(role)}>edit</button>
-                                  {!role.is_default && (
-                                    <button type="button" className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors p-1" onClick={() => handleDelete(role)}>delete</button>
-                                  )}
+                                )}
+                                {canManageRoles && !role.is_default && (
+                                  <button type="button" className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors p-1" onClick={() => handleDelete(role)}>delete</button>
+                                )}
                                 </td>
                               </tr>
                             );
@@ -386,9 +412,11 @@ export default function Roles() {
                       <button type="button" onClick={handleReset} disabled={!hasChanges} className="flex-1 sm:flex-none px-4 py-2 bg-surface text-on-surface border border-outline-variant rounded-lg font-label-md text-label-md hover:bg-surface-container-highest transition-colors disabled:opacity-50">
                         Reset
                       </button>
+                      {canManageRoles && (
                       <button type="button" onClick={handleSave} disabled={!selectedRole || !hasChanges || saving} className="flex-1 sm:flex-none px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm disabled:opacity-50">
                         {saving ? 'Saving…' : 'Save Changes'}
                       </button>
+                    )}
                     </div>
                   </div>
                   <div className="p-6 overflow-y-auto flex-1 bg-surface-container-lowest">

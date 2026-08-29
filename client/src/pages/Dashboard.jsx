@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { useMockNav } from '../hooks/useMockNav.js';
+import { usePerm } from '../hooks/usePerm.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -21,6 +22,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const handleNav = useMockNav();
   const settings = useSettings();
+  const can = usePerm();
   const { logout, user } = useAuth();
   const { data, error, loading } = useFetch('/dashboard/summary');
 
@@ -127,6 +129,7 @@ export default function Dashboard() {
             </a>
             <ul className="ml-6 mt-1 space-y-1 mb-1 border-l border-outline-variant dark:border-outline pl-3">
               <li><a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">Company Information</a></li>
+              <li><a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">Team Members</a></li>
               <li><a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">Roles &amp; Permissions</a></li>
             </ul>
           </div>
@@ -196,14 +199,18 @@ export default function Dashboard() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => navigate('/clients/new')} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors">
-                  <span className="material-symbols-outlined text-[18px]">person_add</span>
-                  Add Client
-                </button>
-                <button type="button" onClick={() => navigate('/invoices/new')} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors">
-                  <span className="material-symbols-outlined text-[18px]">post_add</span>
-                  Create Invoice
-                </button>
+                {can('clients.create') && (
+                  <button type="button" onClick={() => navigate('/clients/new')} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">person_add</span>
+                    Add Client
+                  </button>
+                )}
+                {can('billing.create') && (
+                  <button type="button" onClick={() => navigate('/invoices/new')} className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">post_add</span>
+                    Create Invoice
+                  </button>
+                )}
               </div>
             </div>
 

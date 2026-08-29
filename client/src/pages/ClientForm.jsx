@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMockNav } from '../hooks/useMockNav.js';
+import { usePerm } from '../hooks/usePerm.js';
 import { useSettings } from '../hooks/useSettings.js';
+import AccessDenied from '../components/AccessDenied.jsx';
+import { authHeaders } from '../utils/authHeader.js';
 
 const TYPE_OPTIONS = [
   { value: 'individual', label: 'Individual' },
@@ -30,6 +33,7 @@ export default function ClientForm() {
   const navigate = useNavigate();
   const handleNav = useMockNav();
   const settings = useSettings();
+  const can = usePerm();
   const { id } = useParams();
   const isEdit = Boolean(id);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -42,7 +46,7 @@ export default function ClientForm() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/clients/${id}`);
+        const res = await fetch(`/api/clients/${id}`, { headers: authHeaders() });
         const client = await res.json().catch(() => null);
         if (!res.ok) throw new Error(client?.error || `Request failed (${res.status})`);
         if (cancelled) return;
@@ -89,7 +93,7 @@ export default function ClientForm() {
       }
       const res = await fetch(isEdit ? `/api/clients/${id}` : '/api/clients', {
         method: isEdit ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload),
       });
       const json = await res.json().catch(() => null);
@@ -105,6 +109,10 @@ export default function ClientForm() {
   const selectCls = `${inputCls} bg-surface-container-lowest`;
   const monoInputCls = `${inputCls} font-data-mono text-data-mono uppercase`;
   const labelCls = 'font-label-md text-label-md text-on-surface block mb-unit';
+
+  if (!(isEdit ? can('clients.edit') : can('clients.create'))) {
+    return <AccessDenied message={isEdit ? "You don't have permission to edit clients." : "You don't have permission to create clients."} />;
+  }
 
   return (
     <div className="bg-surface font-body-md text-on-surface h-screen flex overflow-hidden" onClick={handleNav}>
@@ -144,11 +152,16 @@ export default function ClientForm() {
                   Company Information
                 </a>
               </li>
-              <li>
-                <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                  Roles &amp; Permissions
-                </a>
-              </li>
+<li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Team Members
+                    </a>
+                  </li>
+                  <li>
+                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
+                      Roles &amp; Permissions
+                    </a>
+                  </li>
             </ul>
           </div>
         </nav>

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { query } from '../config/db.js';
 import { httpError } from '../utils/http-error.js';
+import { assertUserInTenant } from '../utils/member-check.js';
+import { requirePerm } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
@@ -35,17 +37,15 @@ function validate(data, { partial = false } = {}) {
   if (data.gstin === '') data.gstin = null;
 }
 
-// GET /api/clients?status=&type=&search=&tenant_id=
-router.get('/', async (req, res, next) => {
+// GET /api/clients?status=&type=&search=
+// Always scoped to the authenticated user's tenant.
+router.get('/', requirePerm('clients.view'), async (req, res, next) => {
   try {
-    const { status, type, search, tenant_id } = req.query;
+    const { status, type, search } = req.query;
     const conditions = [];
-    const params = [];
+    const params = [req.user.tenant_id];
 
-    if (tenant_id) {
-      params.push(tenant_id);
-      conditions.push(`tenant_id = $${params.length}`);
-    }
+    conditions.push('tenant_id = $1');
     if (status) {
       params.push(status);
       conditions.push(`status = $${params.length}`);
@@ -72,9 +72,12 @@ router.get('/', async (req, res, next) => {
 });
 
 // GET /api/clients/:id
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requirePerm('clients.view'), async (req, res, next) => {
   try {
-    const { rows } = await query('SELECT * FROM clients WHERE id = $1', [req.params.id]);
+    const { rows } = await query('SELECT * FROM clients WHERE id = $1 AND tenant_id = $2', [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     if (!rows[0]) throw httpError(404, 'Client not found');
     res.json(rows[0]);
   } catch (err) {
@@ -83,10 +86,12 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /api/clients
-router.post('/', async (req, res, next) => {
+router.post('/', requirePerm('clients.create'), async (req, res, next) => {
   try {
     const data = pickFields(req.body || {});
     validate(data);
+    data.tenant_id = req.user.tenant_id;
+    if (data.assigned_to) await assertUserInTenant(data.assigned_to, req.user.tenant_id);
 
     const keys = Object.keys(data);
     if (!keys.length) throw httpError(400, 'No valid fields provided');
@@ -105,19 +110,20 @@ router.post('/', async (req, res, next) => {
 });
 
 // PUT /api/clients/:id
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requirePerm('clients.edit'), async (req, res, next) => {
   try {
     const data = pickFields(req.body || {});
     validate(data, { partial: true });
+    if (data.assigned_to) await assertUserInTenant(data.assigned_to, req.user.tenant_id);
 
     const keys = Object.keys(data);
     if (!keys.length) throw httpError(400, 'No valid fields provided');
 
     const sets = keys.map((key, i) => `${key} = $${i + 1}`);
-    const values = [...Object.values(data), req.params.id];
+    const values = [...Object.values(data), req.params.id, req.user.tenant_id];
 
     const { rows } = await query(
-      `UPDATE clients SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      `UPDATE clients SET ${sets.join(', ')} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING *`,
       values
     );
     if (!rows[0]) throw httpError(404, 'Client not found');
@@ -128,9 +134,12 @@ router.put('/:id', async (req, res, next) => {
 });
 
 // DELETE /api/clients/:id
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requirePerm('clients.delete'), async (req, res, next) => {
   try {
-    const { rowCount } = await query('DELETE FROM clients WHERE id = $1', [req.params.id]);
+    const { rowCount } = await query('DELETE FROM clients WHERE id = $1 AND tenant_id = $2', [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     if (!rowCount) throw httpError(404, 'Client not found');
     res.status(204).end();
   } catch (err) {

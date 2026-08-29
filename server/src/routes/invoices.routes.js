@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../config/db.js';
 import { httpError } from '../utils/http-error.js';
+import { requirePerm } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
@@ -43,28 +44,34 @@ function validate(data, { partial = false } = {}) {
   }
 }
 
-async function nextInvoiceNumber() {
+async function nextInvoiceNumber(tenantId) {
   const year = new Date().getFullYear();
+
+  const prefixRes = await query(
+    'SELECT invoice_prefix FROM settings WHERE tenant_id = $1 LIMIT 1',
+    [tenantId],
+  );
+  const rawPrefix = (prefixRes.rows[0]?.invoice_prefix || 'VY-').trim();
+  const prefix = `${rawPrefix}${rawPrefix.endsWith('-') ? '' : '-'}`;
+
   const { rows } = await query(
     `SELECT COUNT(*)::int AS count FROM invoices
-     WHERE invoice_number LIKE $1`,
-    [`VY-${year}-%`]
+     WHERE tenant_id = $1 AND invoice_number LIKE $2`,
+    [tenantId, `${prefix}${year}-%`],
   );
   const seq = String(rows[0].count + 1).padStart(4, '0');
-  return `VY-${year}-${seq}`;
+  return `${prefix}${year}-${seq}`;
 }
 
-// GET /api/invoices?client_id=&status=&search=&tenant_id=
-router.get('/', async (req, res, next) => {
+// GET /api/invoices?client_id=&status=&search=
+// Always scoped to the authenticated user's tenant.
+router.get('/', requirePerm('billing.view'), async (req, res, next) => {
   try {
-    const { client_id, status, search, tenant_id } = req.query;
+    const { client_id, status, search } = req.query;
     const conditions = [];
-    const params = [];
+    const params = [req.user.tenant_id];
 
-    if (tenant_id) {
-      params.push(tenant_id);
-      conditions.push(`c.tenant_id = $${params.length}`);
-    }
+    conditions.push('i.tenant_id = $1');
     if (client_id) {
       params.push(client_id);
       conditions.push(`i.client_id = $${params.length}`);
@@ -91,14 +98,17 @@ router.get('/', async (req, res, next) => {
 });
 
 // GET /api/invoices/:id (includes payment history)
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requirePerm('billing.view'), async (req, res, next) => {
   try {
-    const { rows } = await query(`${BASE_SELECT} WHERE i.id = $1`, [req.params.id]);
+    const { rows } = await query(`${BASE_SELECT} WHERE i.id = $1 AND i.tenant_id = $2`, [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     if (!rows[0]) throw httpError(404, 'Invoice not found');
 
     const payments = await query(
-      'SELECT * FROM payments WHERE invoice_id = $1 ORDER BY paid_at DESC',
-      [req.params.id]
+      'SELECT * FROM payments WHERE invoice_id = $1 AND tenant_id = $2 ORDER BY paid_at DESC',
+      [req.params.id, req.user.tenant_id]
     );
     rows[0].payments = payments.rows;
     res.json(rows[0]);
@@ -108,24 +118,23 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /api/invoices
-router.post('/', async (req, res, next) => {
+router.post('/', requirePerm('billing.create'), async (req, res, next) => {
   try {
     const data = pickFields(req.body || {});
-    console.log('POST /api/invoices payload:', JSON.stringify(data));
     validate(data);
 
-    const client = await query('SELECT id FROM clients WHERE id = $1', [data.client_id]);
+    const client = await query('SELECT id FROM clients WHERE id = $1 AND tenant_id = $2', [
+      data.client_id,
+      req.user.tenant_id,
+    ]);
     if (!client.rows[0]) throw httpError(400, 'client_id does not exist');
 
-    const invoiceNumber = await nextInvoiceNumber();
-    console.log('Invoice number:', invoiceNumber);
+    const invoiceNumber = await nextInvoiceNumber(req.user.tenant_id);
 
+    data.tenant_id = req.user.tenant_id;
     const keys = Object.keys(data);
     const placeholders = ['$1', ...keys.map((_, i) => `$${i + 2}`)];
     const values = [invoiceNumber, ...Object.values(data)];
-
-    console.log('Keys:', keys);
-    console.log('Values:', values.map(v => typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : v));
 
     const inserted = await query(
       `INSERT INTO invoices (invoice_number${keys.length ? ', ' : ''}${keys.join(', ')})
@@ -134,16 +143,18 @@ router.post('/', async (req, res, next) => {
       values
     );
 
-    const { rows } = await query(`${BASE_SELECT} WHERE i.id = $1`, [inserted.rows[0].id]);
+    const { rows } = await query(
+      `${BASE_SELECT} WHERE i.id = $1 AND i.tenant_id = $2`,
+      [inserted.rows[0].id, req.user.tenant_id]
+    );
     res.status(201).json(rows[0]);
   } catch (err) {
-    console.error('POST /api/invoices error:', err.message, err.stack);
     next(err);
   }
 });
 
 // PUT /api/invoices/:id
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requirePerm('billing.edit'), async (req, res, next) => {
   try {
     const data = pickFields(req.body || {});
     validate(data, { partial: true });
@@ -152,15 +163,18 @@ router.put('/:id', async (req, res, next) => {
     if (!keys.length) throw httpError(400, 'No valid fields provided');
 
     const sets = keys.map((key, i) => `${key} = $${i + 1}`);
-    const values = [...Object.values(data), req.params.id];
+    const values = [...Object.values(data), req.params.id, req.user.tenant_id];
 
     const updated = await query(
-      `UPDATE invoices SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING id`,
+      `UPDATE invoices SET ${sets.join(', ')} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING id`,
       values
     );
     if (!updated.rows[0]) throw httpError(404, 'Invoice not found');
 
-    const { rows } = await query(`${BASE_SELECT} WHERE i.id = $1`, [updated.rows[0].id]);
+    const { rows } = await query(
+      `${BASE_SELECT} WHERE i.id = $1 AND i.tenant_id = $2`,
+      [updated.rows[0].id, req.user.tenant_id]
+    );
     res.json(rows[0]);
   } catch (err) {
     next(err);
@@ -168,9 +182,12 @@ router.put('/:id', async (req, res, next) => {
 });
 
 // DELETE /api/invoices/:id
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requirePerm('billing.delete'), async (req, res, next) => {
   try {
-    const { rowCount } = await query('DELETE FROM invoices WHERE id = $1', [req.params.id]);
+    const { rowCount } = await query('DELETE FROM invoices WHERE id = $1 AND tenant_id = $2', [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     if (!rowCount) throw httpError(404, 'Invoice not found');
     res.status(204).end();
   } catch (err) {
@@ -179,7 +196,7 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 // POST /api/invoices/:id/payments — record a payment, auto-set status to paid when settled
-router.post('/:id/payments', async (req, res, next) => {
+router.post('/:id/payments', requirePerm('billing.record_payment'), async (req, res, next) => {
   try {
     const { amount, method = 'bank_transfer', reference_no = null, paid_at = null } = req.body || {};
     if (!amount || Number(amount) <= 0) throw httpError(400, 'amount must be a positive number');
@@ -187,29 +204,32 @@ router.post('/:id/payments', async (req, res, next) => {
       throw httpError(400, `method must be one of: ${PAYMENT_METHODS.join(', ')}`);
     }
 
-    const invoices = await query('SELECT * FROM invoices WHERE id = $1', [req.params.id]);
+    const invoices = await query('SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2', [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     const invoice = invoices.rows[0];
     if (!invoice) throw httpError(404, 'Invoice not found');
 
     const totals = await query(
-      'SELECT COALESCE(SUM(amount), 0)::numeric AS paid FROM payments WHERE invoice_id = $1',
-      [invoice.id]
+      'SELECT COALESCE(SUM(amount), 0)::numeric AS paid FROM payments WHERE invoice_id = $1 AND tenant_id = $2',
+      [invoice.id, req.user.tenant_id]
     );
     const totalDue = Number(invoice.amount) * (1 + Number(invoice.gst_rate) / 100);
     const newPaid = Number(totals.rows[0].paid) + Number(amount);
 
     const inserted = await query(
-      `INSERT INTO payments (invoice_id, amount, method, reference_no, paid_at)
-       VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, now()))
+      `INSERT INTO payments (invoice_id, tenant_id, amount, method, reference_no, paid_at)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()))
        RETURNING *`,
-      [invoice.id, amount, method, reference_no, paid_at]
+      [invoice.id, req.user.tenant_id, amount, method, reference_no, paid_at]
     );
 
     let updatedStatus = null;
     if (newPaid >= totalDue && invoice.status !== 'paid') {
       await query(
-        "UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $1",
-        [invoice.id]
+        "UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $1 AND tenant_id = $2",
+        [invoice.id, req.user.tenant_id]
       );
       updatedStatus = 'paid';
     }

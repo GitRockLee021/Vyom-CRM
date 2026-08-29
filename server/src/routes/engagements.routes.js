@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { query } from '../config/db.js';
 import { httpError } from '../utils/http-error.js';
+import { assertUserInTenant } from '../utils/member-check.js';
+import { requirePerm } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
@@ -43,12 +45,13 @@ function validate(data, { partial = false } = {}) {
 }
 
 // GET /api/engagements?client_id=&status=&assigned_to=
-router.get('/', async (req, res, next) => {
+router.get('/', requirePerm('engagements.view'), async (req, res, next) => {
   try {
     const { client_id, status, assigned_to } = req.query;
     const conditions = [];
-    const params = [];
+    const params = [req.user.tenant_id];
 
+    conditions.push('e.tenant_id = $1');
     for (const [field, value] of [['client_id', client_id], ['status', status], ['assigned_to', assigned_to]]) {
       if (value) {
         params.push(value);
@@ -68,15 +71,18 @@ router.get('/', async (req, res, next) => {
 });
 
 // GET /api/engagements/:id
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requirePerm('engagements.view'), async (req, res, next) => {
   try {
-    const { rows } = await query(`${BASE_SELECT} WHERE e.id = $1`, [req.params.id]);
+    const { rows } = await query(`${BASE_SELECT} WHERE e.id = $1 AND e.tenant_id = $2`, [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     if (!rows[0]) throw httpError(404, 'Engagement not found');
     const engagement = rows[0];
 
     const tasks = await query(
-      'SELECT * FROM tasks WHERE engagement_id = $1 ORDER BY created_at',
-      [engagement.id]
+      'SELECT * FROM tasks WHERE engagement_id = $1 AND tenant_id = $2 ORDER BY created_at',
+      [engagement.id, req.user.tenant_id]
     );
     engagement.tasks = tasks.rows;
     res.json(engagement);
@@ -86,19 +92,27 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /api/engagements
-router.post('/', async (req, res, next) => {
+router.post('/', requirePerm('engagements.create'), async (req, res, next) => {
   try {
     const data = pickFields(req.body || {});
     validate(data);
 
+    // Verify referenced rows exist AND belong to the caller's tenant.
+    const client = await query('SELECT id FROM clients WHERE id = $1 AND tenant_id = $2', [
+      data.client_id,
+      req.user.tenant_id,
+    ]);
+    if (!client.rows[0]) throw httpError(400, 'client_id does not exist');
+    const service = await query('SELECT id FROM services WHERE id = $1 AND tenant_id = $2', [
+      data.service_id,
+      req.user.tenant_id,
+    ]);
+    if (!service.rows[0]) throw httpError(400, 'service_id does not exist');
+    if (data.assigned_to) await assertUserInTenant(data.assigned_to, req.user.tenant_id);
+
+    data.tenant_id = req.user.tenant_id;
     const keys = Object.keys(data);
     if (!keys.length) throw httpError(400, 'No valid fields provided');
-
-    // Verify referenced rows exist to return clean 400s instead of FK errors.
-    const client = await query('SELECT id FROM clients WHERE id = $1', [data.client_id]);
-    if (!client.rows[0]) throw httpError(400, 'client_id does not exist');
-    const service = await query('SELECT id FROM services WHERE id = $1', [data.service_id]);
-    if (!service.rows[0]) throw httpError(400, 'service_id does not exist');
 
     const placeholders = keys.map((_, i) => `$${i + 1}`);
     const inserted = await query(
@@ -108,7 +122,10 @@ router.post('/', async (req, res, next) => {
       Object.values(data)
     );
 
-    const { rows } = await query(`${BASE_SELECT} WHERE e.id = $1`, [inserted.rows[0].id]);
+    const { rows } = await query(
+      `${BASE_SELECT} WHERE e.id = $1 AND e.tenant_id = $2`,
+      [inserted.rows[0].id, req.user.tenant_id]
+    );
     res.status(201).json(rows[0]);
   } catch (err) {
     next(err);
@@ -116,24 +133,28 @@ router.post('/', async (req, res, next) => {
 });
 
 // PUT /api/engagements/:id
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requirePerm('engagements.edit'), async (req, res, next) => {
   try {
     const data = pickFields(req.body || {});
     validate(data, { partial: true });
+    if (data.assigned_to) await assertUserInTenant(data.assigned_to, req.user.tenant_id);
 
     const keys = Object.keys(data);
     if (!keys.length) throw httpError(400, 'No valid fields provided');
 
     const sets = keys.map((key, i) => `${key} = $${i + 1}`);
-    const values = [...Object.values(data), req.params.id];
+    const values = [...Object.values(data), req.params.id, req.user.tenant_id];
 
     const updated = await query(
-      `UPDATE engagements SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING id`,
+      `UPDATE engagements SET ${sets.join(', ')} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING id`,
       values
     );
     if (!updated.rows[0]) throw httpError(404, 'Engagement not found');
 
-    const { rows } = await query(`${BASE_SELECT} WHERE e.id = $1`, [updated.rows[0].id]);
+    const { rows } = await query(
+      `${BASE_SELECT} WHERE e.id = $1 AND e.tenant_id = $2`,
+      [updated.rows[0].id, req.user.tenant_id]
+    );
     res.json(rows[0]);
   } catch (err) {
     next(err);
@@ -141,9 +162,12 @@ router.put('/:id', async (req, res, next) => {
 });
 
 // DELETE /api/engagements/:id
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requirePerm('engagements.delete'), async (req, res, next) => {
   try {
-    const { rowCount } = await query('DELETE FROM engagements WHERE id = $1', [req.params.id]);
+    const { rowCount } = await query('DELETE FROM engagements WHERE id = $1 AND tenant_id = $2', [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     if (!rowCount) throw httpError(404, 'Engagement not found');
     res.status(204).end();
   } catch (err) {

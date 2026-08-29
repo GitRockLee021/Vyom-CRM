@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import InvoiceDocument from '../components/InvoiceDocument.jsx';
+import { authHeaders } from '../utils/authHeader.js';
 
 export default function InvoiceView() {
   const { id } = useParams();
@@ -18,8 +19,8 @@ export default function InvoiceView() {
         setLoading(true);
         setError(null);
         const [invRes, settRes] = await Promise.all([
-          fetch(`/api/invoices/${id}`),
-          fetch('/api/settings'),
+          fetch(`/api/invoices/${id}`, { headers: authHeaders() }),
+          fetch('/api/settings', { headers: authHeaders() }),
         ]);
         const json = await invRes.json().catch(() => null);
         if (!invRes.ok) throw new Error(json?.error || `Request failed (${invRes.status})`);

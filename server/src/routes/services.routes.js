@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../config/db.js';
 import { httpError } from '../utils/http-error.js';
+import { requirePerm } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
@@ -24,14 +25,14 @@ function validate(data, { partial = false } = {}) {
 }
 
 // GET /api/services?category=
-router.get('/', async (req, res, next) => {
+router.get('/', requirePerm('engagements.view'), async (req, res, next) => {
   try {
     const { category } = req.query;
-    const params = [];
-    let where = '';
+    const params = [req.user.tenant_id];
+    let where = 'WHERE tenant_id = $1';
     if (category) {
       params.push(category);
-      where = `WHERE category = $1`;
+      where += ` AND category = $2`;
     }
     const { rows } = await query(
       `SELECT * FROM services ${where} ORDER BY name`,
@@ -44,9 +45,12 @@ router.get('/', async (req, res, next) => {
 });
 
 // GET /api/services/:id
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requirePerm('engagements.view'), async (req, res, next) => {
   try {
-    const { rows } = await query('SELECT * FROM services WHERE id = $1', [req.params.id]);
+    const { rows } = await query('SELECT * FROM services WHERE id = $1 AND tenant_id = $2', [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     if (!rows[0]) throw httpError(404, 'Service not found');
     res.json(rows[0]);
   } catch (err) {
@@ -55,10 +59,11 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /api/services
-router.post('/', async (req, res, next) => {
+router.post('/', requirePerm('engagements.create'), async (req, res, next) => {
   try {
     const data = pickFields(req.body || {});
     validate(data);
+    data.tenant_id = req.user.tenant_id;
 
     const keys = Object.keys(data);
     const placeholders = keys.map((_, i) => `$${i + 1}`);
@@ -76,7 +81,7 @@ router.post('/', async (req, res, next) => {
 });
 
 // PUT /api/services/:id
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requirePerm('engagements.edit'), async (req, res, next) => {
   try {
     const data = pickFields(req.body || {});
     validate(data, { partial: true });
@@ -85,10 +90,10 @@ router.put('/:id', async (req, res, next) => {
     if (!keys.length) throw httpError(400, 'No valid fields provided');
 
     const sets = keys.map((key, i) => `${key} = $${i + 1}`);
-    const values = [...Object.values(data), req.params.id];
+    const values = [...Object.values(data), req.params.id, req.user.tenant_id];
 
     const { rows } = await query(
-      `UPDATE services SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      `UPDATE services SET ${sets.join(', ')} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING *`,
       values
     );
     if (!rows[0]) throw httpError(404, 'Service not found');
@@ -100,9 +105,12 @@ router.put('/:id', async (req, res, next) => {
 });
 
 // DELETE /api/services/:id
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requirePerm('engagements.delete'), async (req, res, next) => {
   try {
-    const { rowCount } = await query('DELETE FROM services WHERE id = $1', [req.params.id]);
+    const { rowCount } = await query('DELETE FROM services WHERE id = $1 AND tenant_id = $2', [
+      req.params.id,
+      req.user.tenant_id,
+    ]);
     if (!rowCount) throw httpError(404, 'Service not found');
     res.status(204).end();
   } catch (err) {
