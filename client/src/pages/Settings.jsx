@@ -1,8 +1,292 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMockNav } from '../hooks/useMockNav.js';
 import { usePerm } from '../hooks/usePerm.js';
-import { useSettings } from '../hooks/useSettings.js';
 import { authHeaders } from '../utils/authHeader.js';
+
+const SERVICE_CATEGORIES = [
+  { value: 'taxation', label: 'Taxation' },
+  { value: 'compliance', label: 'Compliance' },
+  { value: 'advisory', label: 'Advisory' },
+  { value: 'audit', label: 'Audit' },
+  { value: 'registration', label: 'Registration' },
+  { value: 'other', label: 'Other' },
+];
+
+const EMPTY_SERVICE = { code: '', name: '', category: 'taxation', default_fee: '', is_recurring: false, description: '' };
+
+function ServicesSection() {
+  const can = usePerm();
+  const canCreate = can('engagements.create');
+  const canEdit = can('engagements.edit');
+  const canDelete = can('engagements.delete');
+  const canManage = canCreate || canEdit || canDelete;
+
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('');
+  const [notice, setNotice] = useState('');
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(EMPTY_SERVICE);
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    try {
+      const res = await fetch('/api/services', { headers: authHeaders() });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed to load services');
+      setServices(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const t = setTimeout(() => setNotice(''), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  const categoryLabel = (v) => SERVICE_CATEGORIES.find((c) => c.value === v)?.label || 'Other';
+
+  const visible = filter
+    ? services.filter((s) => s.category === filter)
+    : services;
+
+  function startAdd() {
+    setEditing('new');
+    setForm(EMPTY_SERVICE);
+  }
+
+  function startEdit(service) {
+    setEditing(service.id);
+    setForm({
+      code: service.code || '',
+      name: service.name || '',
+      category: service.category || 'other',
+      default_fee: service.default_fee != null ? String(service.default_fee) : '',
+      is_recurring: Boolean(service.is_recurring),
+      description: service.description || '',
+    });
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setForm(EMPTY_SERVICE);
+  }
+
+  async function handleSave(e) {
+    e.preventDefault();
+    if (!form.name.trim()) { setNotice('Service name is required.'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        default_fee: form.default_fee === '' ? null : Number(form.default_fee),
+      };
+      const res = await fetch(
+        editing === 'new' ? '/api/services' : `/api/services/${editing}`,
+        {
+          method: editing === 'new' ? 'POST' : 'PUT',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload),
+        },
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+      setNotice(editing === 'new' ? 'Service added.' : 'Service updated.');
+      cancelEdit();
+      await load();
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(service) {
+    if (!window.confirm(`Delete the service "${service.name}"?`)) return;
+    try {
+      const res = await fetch(`/api/services/${service.id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || `Request failed (${res.status})`);
+      }
+      setNotice('Service deleted.');
+      await load();
+    } catch (err) {
+      setNotice(err.message);
+    }
+  }
+
+  const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
+
+  return (
+    <section className="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden">
+      <div className="p-stack-md border-b border-outline-variant bg-surface-container-low flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-headline-md text-headline-md text-on-surface flex items-center">
+          <span className="material-symbols-outlined mr-2 text-primary">handyman</span>
+          Services
+        </h2>
+        {canCreate && (
+          <button
+            type="button"
+            onClick={startAdd}
+            className="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-[16px]">add</span>
+            Add Service
+          </button>
+        )}
+      </div>
+
+      {notice && (
+        <div className="mx-container-padding mt-stack-md px-4 py-3 rounded-lg bg-primary-fixed/40 border border-outline-variant font-body-md text-body-md text-on-surface flex items-center justify-between">
+          <span>{notice}</span>
+          <button type="button" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface" onClick={() => setNotice('')}>Dismiss</button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="p-container-padding text-on-surface-variant">Loading services…</div>
+      ) : (
+        <div className="p-container-padding space-y-stack-md">
+          {/* Filter chips */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFilter('')}
+              className={`px-3 py-1 rounded-full font-label-md text-label-md border transition-colors ${filter === '' ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant text-on-surface hover:bg-surface-container-low'}`}
+            >
+              All
+            </button>
+            {SERVICE_CATEGORIES.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => setFilter(c.value)}
+                className={`px-3 py-1 rounded-full font-label-md text-label-md border transition-colors ${filter === c.value ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant text-on-surface hover:bg-surface-container-low'}`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Add / Edit form */}
+          {editing && (
+            <form onSubmit={handleSave} className="border border-outline-variant rounded-lg p-stack-md bg-surface-container-low space-y-stack-md">
+              <div className="flex items-center justify-between">
+                <h3 className="font-headline-sm text-headline-sm text-on-surface">
+                  {editing === 'new' ? 'Add Service' : 'Edit Service'}
+                </h3>
+                <button type="button" className="text-on-surface-variant hover:text-on-surface" onClick={cancelEdit}>
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+                <div>
+                  <label className={labelCls}>Service Name <span className="text-error">*</span></label>
+                  <input className={inputCls} type="text" placeholder="e.g. GST Filing" value={form.name} onChange={set('name')} required />
+                </div>
+                <div>
+                  <label className={labelCls}>Code</label>
+                  <input className={`${inputCls} font-data-mono text-data-mono uppercase`} type="text" placeholder="e.g. GST-FILING" value={form.code} onChange={set('code')} />
+                </div>
+                <div>
+                  <label className={labelCls}>Category</label>
+                  <select className={inputCls} value={form.category} onChange={set('category')}>
+                    {SERVICE_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Default Fee (₹)</label>
+                  <input className={inputCls} type="number" min="0" step="0.01" placeholder="0.00" value={form.default_fee} onChange={set('default_fee')} />
+                </div>
+                <div className="md:col-span-2">
+                  <label className={labelCls}>Description</label>
+                  <textarea className={`${inputCls} resize-none`} rows="2" value={form.description} onChange={set('description')} />
+                </div>
+                <div className="md:col-span-2 flex items-center gap-2">
+                  <input id="svc-recurring" type="checkbox" checked={form.is_recurring} onChange={(e) => setForm({ ...form, is_recurring: e.target.checked })} />
+                  <label htmlFor="svc-recurring" className="font-body-md text-body-md text-on-surface">Recurring service (e.g. monthly/annual filings)</label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button type="button" className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low" onClick={cancelEdit}>Cancel</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50">
+                  {saving ? 'Saving…' : editing === 'new' ? 'Add Service' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Services list */}
+          {visible.length === 0 ? (
+            <div className="py-10 text-center font-body-md text-body-md text-on-surface-variant">
+              {services.length === 0 ? 'No services yet. Add your first service.' : 'No services in this category.'}
+            </div>
+          ) : (
+            <div className="border border-outline-variant rounded-lg overflow-hidden">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-surface-container-low font-label-md text-label-md text-on-surface-variant border-b border-outline-variant">
+                    <th className="px-4 py-2.5">Name</th>
+                    <th className="px-4 py-2.5">Code</th>
+                    <th className="px-4 py-2.5">Category</th>
+                    <th className="px-4 py-2.5">Default Fee</th>
+                    <th className="px-4 py-2.5">Recurring</th>
+                    {canManage && <th className="px-4 py-2.5 text-right">Actions</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant">
+                  {visible.map((s) => (
+                    <tr key={s.id} className="hover:bg-surface-container-low transition-colors">
+                      <td className="px-4 py-2.5 font-body-md text-body-md text-on-surface">{s.name}</td>
+                      <td className="px-4 py-2.5 font-data-mono text-data-mono text-on-surface-variant">{s.code || '—'}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] font-medium">{categoryLabel(s.category)}</span>
+                      </td>
+                      <td className="px-4 py-2.5 font-data-mono text-data-mono text-on-surface">{s.default_fee != null ? `₹${Number(s.default_fee).toLocaleString('en-IN')}` : '—'}</td>
+                      <td className="px-4 py-2.5">
+                        {s.is_recurring ? (
+                          <span className="px-2 py-0.5 rounded-full bg-tertiary-fixed/30 text-on-surface text-[11px] font-medium">Recurring</span>
+                        ) : (
+                          <span className="font-body-md text-body-md text-on-surface-variant">—</span>
+                        )}
+                      </td>
+                      {canManage && (
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center justify-end gap-1">
+                            {canEdit && (
+                              <button type="button" className="text-on-surface-variant hover:text-secondary p-1" title="Edit" onClick={() => startEdit(s)}>
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button type="button" className="text-on-surface-variant hover:text-error p-1" title="Delete" onClick={() => handleDelete(s)}>
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 const EMPTY_SETTINGS = {
   company_name: '',
@@ -24,8 +308,6 @@ const inputCls = 'w-full px-3 py-2 bg-surface-container-lowest border border-out
 const labelCls = 'block font-label-md text-label-md text-on-surface-variant mb-1 uppercase';
 
 export default function Settings() {
-  const handleNav = useMockNav();
-  const settings = useSettings();
   const can = usePerm();
   const editable = can('settings.edit');
   const [form, setForm] = useState(EMPTY_SETTINGS);
@@ -92,104 +374,7 @@ export default function Settings() {
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
   return (
-    <div className="bg-surface font-body-md text-on-surface h-screen flex overflow-hidden" onClick={handleNav}>
-      {/* SideNavBar */}
-      <aside className="bg-surface dark:bg-background border-r border-outline-variant dark:border-outline w-64 h-screen fixed left-0 top-0 z-40 flex flex-col h-full py-stack-md px-4 transition-all duration-200 ease-in-out hidden md:flex">
-        <div className="mb-stack-lg flex items-center gap-3 px-2">
-          <div className="w-10 h-10 rounded bg-primary-container flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-on-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>assured_workload</span>
-          </div>
-          <div>
-            <h2 className="font-headline-sm text-headline-sm text-primary break-words leading-tight">{settings?.company_name || 'Vyom CRM'}</h2>
-          </div>
-        </div>
-        <nav className="flex flex-col gap-1 flex-grow">
-          <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
-            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>dashboard</span>
-            Dashboard
-          </a>
-          <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
-            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>group</span>
-            Clients
-          </a>
-          <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
-            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>receipt_long</span>
-            Billing
-          </a>
-          <div className="flex flex-col">
-            <a className="text-secondary dark:text-secondary-fixed-dim font-bold bg-secondary-fixed dark:bg-secondary-container rounded-lg font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out" href="#">
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>settings</span>
-              Settings
-              <span className="material-symbols-outlined text-sm ml-auto">expand_more</span>
-            </a>
-            <ul className="ml-6 mt-1 space-y-1 mb-1 border-l border-outline-variant dark:border-outline pl-3">
-              <li>
-                <a className="block px-3 py-1.5 rounded-lg text-primary font-bold bg-secondary-fixed/30 dark:bg-secondary-container/40 border-r-4 border-primary font-label-md text-label-md" href="#">
-                  Company Information
-                </a>
-              </li>
-<li>
-                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                      Team Members
-                    </a>
-                  </li>
-                  <li>
-                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                      Roles &amp; Permissions
-                    </a>
-                  </li>
-            </ul>
-          </div>
-        </nav>
-        <ul className="flex flex-col gap-1 mt-auto pt-stack-md border-t border-outline-variant dark:border-outline">
-          <li>
-            <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>contact_support</span>
-              Support
-            </a>
-          </li>
-          <li>
-            <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>logout</span>
-              Logout
-            </a>
-          </li>
-        </ul>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col md:ml-64 w-full relative h-screen overflow-hidden">
-        {/* TopNavBar */}
-        <header className="bg-surface-container-lowest dark:bg-inverse-surface border-b border-outline-variant dark:border-outline w-full h-16 sticky top-0 z-30 font-body-md text-body-md text-primary dark:text-primary-fixed flex items-center justify-between px-container-padding">
-          <button type="button" className="md:hidden p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full mr-2">
-            <span className="material-symbols-outlined">menu</span>
-          </button>
-          <div className="md:hidden font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed mr-auto">
-            {settings?.company_name || 'Vyom CRM'}
-          </div>
-          <div className="hidden md:flex items-center bg-surface-container-low rounded-full px-4 py-2 w-96 border border-transparent focus-within:border-primary transition-colors">
-            <span className="material-symbols-outlined text-on-surface-variant mr-2 text-[20px]">search</span>
-            <input className="bg-transparent border-none focus:ring-0 w-full text-body-md font-body-md text-on-surface placeholder-on-surface-variant p-0 m-0 outline-none" placeholder="Search settings..." type="text" />
-          </div>
-          <div className="flex items-center gap-2 ml-auto">
-            <button type="button" className="relative p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80 transition-all">
-              <span className="material-symbols-outlined text-[24px]">notifications</span>
-            </button>
-            <button type="button" className="p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80 transition-all">
-              <span className="material-symbols-outlined text-[24px]">help</span>
-            </button>
-            <div className="h-6 w-[1px] bg-outline-variant mx-2" />
-            <button type="button" className="flex items-center gap-2 p-1 pl-2 hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80 transition-all">
-              <span className="font-label-md text-label-md text-on-surface font-semibold hidden lg:block">Profile</span>
-              <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center">
-                <span className="material-symbols-outlined text-sm">person</span>
-              </div>
-            </button>
-          </div>
-        </header>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-container-padding bg-background">
+    <div className="flex-1 overflow-y-auto p-container-padding bg-background">
           <div className="max-w-[1080px] mx-auto space-y-stack-lg">
             <div>
               <h1 className="font-headline-lg text-headline-lg text-on-surface mb-2">Settings</h1>
@@ -342,9 +527,10 @@ export default function Settings() {
             </section>
 
             <div className="h-8" />
+
+            {/* Services Catalogue */}
+            <ServicesSection />
           </div>
         </div>
-      </main>
-    </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from '../config/db.js';
+import { query, pool } from '../config/db.js';
 import { httpError } from '../utils/http-error.js';
 import { assertUserInTenant } from '../utils/member-check.js';
 import { requirePerm } from '../middleware/auth.middleware.js';
@@ -13,12 +13,48 @@ const ALLOWED_FIELDS = [
   'status', 'notes', 'assigned_to',
 ];
 
+// Object with the client's selected services ({ id, name }[]).
+// Correlated to the outer `clients c` alias via c.id.
+const SERVICE_SELECT = `
+  SELECT COALESCE(
+    json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name),
+    '[]'::json
+  ) AS services
+  FROM client_services cs
+  JOIN services s ON s.id = cs.service_id
+  WHERE cs.client_id = c.id
+`;
+
 function pickFields(body) {
   const data = {};
   for (const field of ALLOWED_FIELDS) {
     if (body[field] !== undefined) data[field] = body[field];
   }
   return data;
+}
+
+// Replace the client's selected service set. Verifies every service
+// belongs to the caller's tenant before inserting.
+async function syncServices(client, clientId, serviceIds, tenantId) {
+  const ids = Array.isArray(serviceIds)
+    ? [...new Set(serviceIds.map((s) => String(s).trim()).filter(Boolean))]
+    : [];
+  if (ids.length) {
+    const { rows } = await client.query(
+      'SELECT id FROM services WHERE id = ANY($1::uuid[]) AND tenant_id = $2',
+      [ids, tenantId]
+    );
+    const valid = rows.map((r) => r.id);
+    const invalid = ids.filter((id) => !valid.includes(id));
+    if (invalid.length) throw httpError(400, 'One or more selected services do not exist');
+  }
+  await client.query('DELETE FROM client_services WHERE client_id = $1', [clientId]);
+  for (const serviceId of ids) {
+    await client.query(
+      'INSERT INTO client_services (client_id, service_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [clientId, serviceId]
+    );
+  }
 }
 
 const CLIENT_TYPES = ['individual', 'proprietor', 'partnership', 'private_limited', 'llp', 'others', 'business'];
@@ -62,7 +98,8 @@ router.get('/', requirePerm('clients.view'), async (req, res, next) => {
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await query(
-      `SELECT * FROM clients ${where} ORDER BY created_at DESC`,
+      `SELECT c.*, (${SERVICE_SELECT}) AS services
+       FROM clients c ${where} ORDER BY c.created_at DESC`,
       params
     );
     res.json(rows);
@@ -74,10 +111,11 @@ router.get('/', requirePerm('clients.view'), async (req, res, next) => {
 // GET /api/clients/:id
 router.get('/:id', requirePerm('clients.view'), async (req, res, next) => {
   try {
-    const { rows } = await query('SELECT * FROM clients WHERE id = $1 AND tenant_id = $2', [
-      req.params.id,
-      req.user.tenant_id,
-    ]);
+    const { rows } = await query(
+      `SELECT c.*, (${SERVICE_SELECT}) AS services
+       FROM clients c WHERE c.id = $1 AND c.tenant_id = $2`,
+      [req.params.id, req.user.tenant_id]
+    );
     if (!rows[0]) throw httpError(404, 'Client not found');
     res.json(rows[0]);
   } catch (err) {
@@ -87,7 +125,9 @@ router.get('/:id', requirePerm('clients.view'), async (req, res, next) => {
 
 // POST /api/clients
 router.post('/', requirePerm('clients.create'), async (req, res, next) => {
+  const pg = await pool.connect();
   try {
+    await pg.query('BEGIN');
     const data = pickFields(req.body || {});
     validate(data);
     data.tenant_id = req.user.tenant_id;
@@ -97,21 +137,34 @@ router.post('/', requirePerm('clients.create'), async (req, res, next) => {
     if (!keys.length) throw httpError(400, 'No valid fields provided');
 
     const placeholders = keys.map((_, i) => `$${i + 1}`);
-    const { rows } = await query(
+    const inserted = await pg.query(
       `INSERT INTO clients (${keys.join(', ')})
        VALUES (${placeholders.join(', ')})
        RETURNING *`,
       Object.values(data)
     );
+    const client = inserted.rows[0];
+    await syncServices(pg, client.id, req.body?.service_ids, req.user.tenant_id);
+
+    const { rows } = await pg.query(
+      `SELECT c.*, (${SERVICE_SELECT}) AS services FROM clients c WHERE c.id = $1`,
+      [client.id]
+    );
+    await pg.query('COMMIT');
     res.status(201).json(rows[0]);
   } catch (err) {
+    await pg.query('ROLLBACK').catch(() => {});
     next(err);
+  } finally {
+    pg.release();
   }
 });
 
 // PUT /api/clients/:id
 router.put('/:id', requirePerm('clients.edit'), async (req, res, next) => {
+  const pg = await pool.connect();
   try {
+    await pg.query('BEGIN');
     const data = pickFields(req.body || {});
     validate(data, { partial: true });
     if (data.assigned_to) await assertUserInTenant(data.assigned_to, req.user.tenant_id);
@@ -122,14 +175,27 @@ router.put('/:id', requirePerm('clients.edit'), async (req, res, next) => {
     const sets = keys.map((key, i) => `${key} = $${i + 1}`);
     const values = [...Object.values(data), req.params.id, req.user.tenant_id];
 
-    const { rows } = await query(
+    const updated = await pg.query(
       `UPDATE clients SET ${sets.join(', ')} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING *`,
       values
     );
-    if (!rows[0]) throw httpError(404, 'Client not found');
+    if (!updated.rows[0]) throw httpError(404, 'Client not found');
+
+    if (req.body?.service_ids !== undefined) {
+      await syncServices(pg, req.params.id, req.body.service_ids, req.user.tenant_id);
+    }
+
+    const { rows } = await pg.query(
+      `SELECT c.*, (${SERVICE_SELECT}) AS services FROM clients c WHERE c.id = $1`,
+      [req.params.id]
+    );
+    await pg.query('COMMIT');
     res.json(rows[0]);
   } catch (err) {
+    await pg.query('ROLLBACK').catch(() => {});
     next(err);
+  } finally {
+    pg.release();
   }
 });
 

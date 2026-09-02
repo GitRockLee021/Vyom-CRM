@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { useMockNav } from '../hooks/useMockNav.js';
 import { usePerm } from '../hooks/usePerm.js';
-import { useSettings } from '../hooks/useSettings.js';
 import AccessDenied from '../components/AccessDenied.jsx';
 import { authHeaders } from '../utils/authHeader.js';
 
@@ -26,15 +24,25 @@ const EMPTY_FORM = {
   contact_person: '', email: '', phone: '',
   address_line1: '', address_line2: '', city: '', state: '', pincode: '',
   gstin: '', pan: '', tan: '',
-  status: 'active', notes: '',
+  status: 'active', notes: '', assigned_to: '',
 };
+
+const ROLE_LABELS = { admin: 'Administrator', accountant: 'Accountant', consultant: 'Consultant' };
+
+const SERVICE_CATEGORY_LABELS = {
+  taxation: 'Taxation',
+  compliance: 'Compliance',
+  advisory: 'Advisory',
+  audit: 'Audit & Compliance',
+  registration: 'Registration',
+  other: 'Other',
+};
+const SERVICE_CATEGORY_ORDER = ['taxation', 'advisory', 'compliance', 'audit', 'registration', 'other'];
 
 export default function ClientForm() {
   const navigate = useNavigate();
   const location = useLocation();
-  const handleNav = useMockNav();
   const fromInvoice = Boolean(location.state?.fromInvoice);
-  const settings = useSettings();
   const can = usePerm();
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -42,6 +50,31 @@ export default function ClientForm() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
+  const [members, setMembers] = useState([]);
+  const [services, setServices] = useState([]);
+  const [serviceIds, setServiceIds] = useState([]);
+  const [servicesOpen, setServicesOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [teamRes, servicesRes] = await Promise.all([
+          fetch('/api/team', { headers: authHeaders() }),
+          fetch('/api/services', { headers: authHeaders() }),
+        ]);
+        const team = await teamRes.json().catch(() => null);
+        const svc = await servicesRes.json().catch(() => null);
+        if (!cancelled) {
+          if (team?.members) setMembers(team.members.filter((m) => m.is_active));
+          if (Array.isArray(svc)) setServices(svc);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!isEdit) return undefined;
@@ -69,7 +102,9 @@ export default function ClientForm() {
           tan: client.tan || '',
           status: client.status || 'active',
           notes: client.notes || '',
+          assigned_to: client.assigned_to || '',
         });
+        setServiceIds((Array.isArray(client.services) ? client.services : []).map((s) => s.id));
       } catch (err) {
         if (!cancelled) setError(err.message);
       } finally {
@@ -83,6 +118,12 @@ export default function ClientForm() {
     return (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
   }
 
+  function toggleService(serviceId) {
+    setServiceIds((prev) => prev.includes(serviceId) ? prev.filter((x) => x !== serviceId) : [...prev, serviceId]);
+  }
+
+  const selectedServices = services.filter((s) => serviceIds.includes(s.id));
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.name.trim()) { setError('Name is required.'); return; }
@@ -93,6 +134,7 @@ export default function ClientForm() {
       for (const [k, v] of Object.entries(form)) {
         if (v !== '') payload[k] = v;
       }
+      payload.service_ids = serviceIds;
       const res = await fetch(isEdit ? `/api/clients/${id}` : '/api/clients', {
         method: isEdit ? 'PUT' : 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -107,281 +149,283 @@ export default function ClientForm() {
     }
   }
 
-  const inputCls = 'w-full border border-outline-variant rounded-DEFAULT p-2 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all';
-  const selectCls = `${inputCls} bg-surface-container-lowest`;
+  const inputCls = 'w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-DEFAULT font-body-md text-body-md text-primary focus:outline-none focus:border-inverse-surface focus:border-2 transition-all';
+  const selectCls = `${inputCls} cursor-pointer appearance-none bg-surface-container-low`;
   const monoInputCls = `${inputCls} font-data-mono text-data-mono uppercase`;
-  const labelCls = 'font-label-md text-label-md text-on-surface block mb-unit';
+  const labelCls = 'font-label-md text-label-md text-on-surface-variant block mb-unit';
+  const cardCls = 'bg-surface-container-lowest border border-outline-variant rounded-lg p-6';
 
   if (!(isEdit ? can('clients.edit') : can('clients.create'))) {
     return <AccessDenied message={isEdit ? "You don't have permission to edit clients." : "You don't have permission to create clients."} />;
   }
 
   return (
-    <div className="bg-surface font-body-md text-on-surface h-screen flex overflow-hidden" onClick={handleNav}>
-      {/* SideNavBar */}
-      <aside className="bg-surface dark:bg-background border-r border-outline-variant dark:border-outline w-64 h-screen fixed left-0 top-0 z-40 flex flex-col h-full py-stack-md px-4 transition-all duration-200 ease-in-out hidden md:flex">
-        {/* Brand/Header */}
-        <div className="mb-stack-lg flex items-center gap-3 px-2">
-          <div className="w-10 h-10 rounded bg-primary-container flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-on-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>assured_workload</span>
+    <div className="space-y-stack-lg">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-outline-variant pb-6">
+        <div>
+          <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md mb-2">
+            <a className="hover:text-primary transition-colors" href="#" onClick={(e) => { e.preventDefault(); navigate(fromInvoice ? '/invoices/new' : '/clients'); }}>Clients</a>
+            {isEdit && (
+              <>
+                <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                <a className="hover:text-primary transition-colors" href="#" onClick={(e) => { e.preventDefault(); navigate(`/clients/${id}/edit`); }}>{form.name || 'Client'}</a>
+              </>
+            )}
+            <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+            <span className="text-primary font-medium">{isEdit ? 'Edit' : 'Add'}</span>
           </div>
-          <div>
-            <h2 className="font-headline-sm text-headline-sm text-primary break-words leading-tight">{settings?.company_name || 'Vyom CRM'}</h2>
-          </div>
+          <h1 className="font-headline-lg text-headline-lg text-primary">{isEdit ? 'Edit Client Profile' : 'Add Client Profile'}</h1>
+          <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+            {isEdit ? `Update information and account details for ${form.name || 'this client'}.` : 'Enter the details below to onboard a new entity into the CRM.'}
+          </p>
         </div>
-        <nav className="flex flex-col gap-1 flex-grow">
-          <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
-            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>dashboard</span>
-            Dashboard
-          </a>
-          <a className="text-secondary dark:text-secondary-fixed-dim font-bold bg-secondary-fixed dark:bg-secondary-container rounded-lg font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out" href="#">
-            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>group</span>
-            Clients
-          </a>
-          <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
-            <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>receipt_long</span>
-            Billing
-          </a>
-          <div className="flex flex-col">
-            <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>settings</span>
-              Settings
-              <span className="material-symbols-outlined text-sm ml-auto">expand_more</span>
-            </a>
-            <ul className="ml-6 mt-1 space-y-1 mb-1 border-l border-outline-variant dark:border-outline pl-3">
-              <li>
-                <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                  Company Information
-                </a>
-              </li>
-<li>
-                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                      Team Members
-                    </a>
-                  </li>
-                  <li>
-                    <a className="block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md" href="#">
-                      Roles &amp; Permissions
-                    </a>
-                  </li>
-            </ul>
-          </div>
-        </nav>
-        {/* Footer Links */}
-        <ul className="flex flex-col gap-1 mt-auto pt-stack-md border-t border-outline-variant dark:border-outline">
-          <li>
-            <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>contact_support</span>
-              Support
-            </a>
-          </li>
-          <li>
-            <a className="text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg" href="#">
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 0" }}>logout</span>
-              Logout
-            </a>
-          </li>
-        </ul>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col md:ml-64 w-full relative h-screen overflow-hidden">
-        {/* TopNavBar */}
-        <header className="bg-surface-container-lowest dark:bg-inverse-surface border-b border-outline-variant dark:border-outline w-full h-16 sticky top-0 z-30 font-body-md text-body-md text-primary dark:text-primary-fixed flex items-center justify-between px-container-padding">
-          <button type="button" className="md:hidden p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full mr-2">
-            <span className="material-symbols-outlined">menu</span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate(fromInvoice ? '/invoices/new' : '/clients')}
+            className="px-4 py-2 border border-outline-variant text-primary bg-surface-container-lowest hover:bg-surface-container transition-colors rounded-DEFAULT font-label-md text-label-md"
+          >
+            Cancel
           </button>
-          <div className="md:hidden font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed mr-auto">
-            {settings?.company_name || 'Vyom CRM'}
-          </div>
-          <div className="hidden md:flex items-center bg-surface-container-low rounded-full px-4 py-2 w-96 border border-transparent focus-within:border-primary transition-colors">
-            <span className="material-symbols-outlined text-on-surface-variant mr-2 text-[20px]">search</span>
-            <input className="bg-transparent border-none focus:ring-0 w-full text-body-md font-body-md text-on-surface placeholder-on-surface-variant p-0 m-0 outline-none" placeholder="Search clients, projects, or invoices..." type="text" />
-          </div>
-          <div className="flex items-center gap-2 ml-auto">
-            <button type="button" className="relative p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80 transition-all">
-              <span className="material-symbols-outlined text-[24px]">notifications</span>
-              <span className="absolute top-1 right-1 bg-error text-on-error text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">5</span>
-            </button>
-            <button type="button" className="p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80 transition-all">
-              <span className="material-symbols-outlined text-[24px]">help</span>
-            </button>
-            <div className="h-6 w-[1px] bg-outline-variant mx-2"></div>
-            <button type="button" className="flex items-center gap-2 p-1 pl-2 hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80 transition-all">
-              <span className="font-label-md text-label-md text-on-surface font-semibold hidden lg:block">Profile</span>
-              <img alt="User profile avatar" className="w-8 h-8 rounded-full object-cover border border-outline-variant" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6JU0IdWSZ7-CjN638O-WcW2BmfgiG5tdXzTH__XGaKHzEXizpDaWTlYRWlw-vnPLhfyL1Nds2rOLQkuW-oKi5AsDSAjNw9A23JdslOl6ok5RVpBEJktRqYBkG-FuXSpUEK76KwXXg5_O8BGT9cVBvExeB8sRQIt-RGZhGmgcsTKlVpymeWgiLfkQv6lXQ0UDXvKrv0nL3C1AchdCMgzX6nUky5Y2y5FnjyOJ0nfstXBJag2MNwEs" />
-            </button>
-          </div>
-        </header>
+          <button
+            type="submit"
+            form="client-form"
+            disabled={saving || loading}
+            className="px-4 py-2 bg-primary text-white hover:bg-primary-container transition-colors rounded-DEFAULT font-label-md text-label-md disabled:opacity-50 flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-sm">save</span>
+            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Client'}
+          </button>
+        </div>
+      </div>
 
-        {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-container-padding bg-background">
-          <div className="max-w-[1440px] mx-auto">
-            {/* Page Header & Actions */}
-            <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-outline-variant py-stack-md mb-stack-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <nav aria-label="Breadcrumb" className="flex text-on-surface-variant font-label-md text-label-md mb-2">
-                  <ol className="flex items-center space-x-2">
-                    <li><a className="hover:text-primary transition-colors" href="#" onClick={(e) => { e.preventDefault(); navigate(fromInvoice ? '/invoices/new' : '/clients'); }}>Clients</a></li>
-                    <li><span className="material-symbols-outlined text-sm">chevron_right</span></li>
-                    <li aria-current="page" className="text-primary">{isEdit ? 'Edit Client' : 'Add New Client'}</li>
-                  </ol>
-                </nav>
-                <h2 className="font-headline-lg text-headline-lg text-on-surface">{isEdit ? 'Edit Client' : 'Add New Client'}</h2>
-                <p className="font-body-md text-body-md text-on-surface-variant mt-1">{isEdit ? 'Updating client record' : 'Enter the details below to onboard a new entity into the CRM.'}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={() => navigate(fromInvoice ? '/invoices/new' : '/clients')} className="bg-surface-container-lowest border border-outline-variant text-on-surface font-label-md text-label-md py-2 px-6 rounded-DEFAULT hover:bg-surface-container transition-colors focus:ring-2 focus:ring-outline-variant outline-none">
-                  Cancel
-                </button>
-                <button type="submit" form="client-form" disabled={saving || loading} className="bg-primary text-on-primary font-label-md text-label-md py-2 px-6 rounded-DEFAULT hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm focus:ring-2 focus:ring-primary outline-none flex items-center gap-2 disabled:opacity-50">
-                  <span className="material-symbols-outlined text-sm">save</span>
-                  {saving ? 'Saving…' : isEdit ? 'Update Client' : 'Save Client'}
-                </button>
-              </div>
+      {error && (
+        <div className="mb-stack-md px-3 py-2 rounded-lg bg-error-container text-on-error-container font-body-md text-body-md">{error}</div>
+      )}
+
+      {loading ? (
+        <div className="py-16 text-center font-body-md text-body-md text-on-surface-variant">Loading client…</div>
+      ) : (
+        <form id="client-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
+            {/* Main Form Column (8 cols) */}
+            <div className="lg:col-span-8 space-y-stack-md">
+              {/* Basic Information Card */}
+              <section className="cardCls">
+                <h3 className="font-headline-md text-headline-md text-primary mb-6 flex items-center gap-2 border-b border-outline-variant pb-4">
+                  <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>corporate_fare</span>
+                  Basic Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="clientType">Assessee Type</label>
+                    <select className={selectCls} id="clientType" value={form.client_type} onChange={set('client_type')}>
+                      {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="legalName">Name <span className="text-error">*</span></label>
+                    <input className={inputCls} id="legalName" placeholder="Enter name as registered" required type="text" value={form.name} onChange={set('name')} />
+                  </div>
+                  <div className="flex flex-col gap-1 md:col-span-2">
+                    <label className={labelCls} htmlFor="contactPerson">Primary Contact Person</label>
+                    <input className={inputCls} id="contactPerson" placeholder="Full name" type="text" value={form.contact_person} onChange={set('contact_person')} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="email">Email Address</label>
+                    <input className={inputCls} id="email" placeholder="contact@company.com" type="email" value={form.email} onChange={set('email')} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="phone">Phone Number <span className="text-error">*</span></label>
+                    <input className={inputCls} id="phone" placeholder="+91 00000 00000" type="tel" required value={form.phone} onChange={set('phone')} />
+                  </div>
+                </div>
+              </section>
+
+              {/* Billing Address Card */}
+              <section className="cardCls">
+                <h3 className="font-headline-md text-headline-md text-primary mb-6 flex items-center gap-2 border-b border-outline-variant pb-4">
+                  <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>location_on</span>
+                  Billing Address
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+                  <div className="flex flex-col gap-1 md:col-span-2">
+                    <label className={labelCls} htmlFor="streetAddress">Street Address</label>
+                    <input className={inputCls} id="streetAddress" placeholder="Building, Street, Area" type="text" value={form.address_line1} onChange={set('address_line1')} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="addressLine2">Address Line 2</label>
+                    <input className={inputCls} id="addressLine2" placeholder="Suite, Floor, Landmark" type="text" value={form.address_line2} onChange={set('address_line2')} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="city">City</label>
+                    <input className={inputCls} id="city" placeholder="City" type="text" value={form.city} onChange={set('city')} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="state">State</label>
+                    <select className={selectCls} id="state" value={form.state} onChange={set('state')}>
+                      <option value="">Select state</option>
+                      {['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh','Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir','Ladakh','Lakshadweep','Puducherry'].map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="zipCode">ZIP/Postal Code</label>
+                    <input className={inputCls} id="zipCode" placeholder="PIN Code" type="text" value={form.pincode} onChange={set('pincode')} maxLength={6} />
+                  </div>
+                </div>
+              </section>
+
+              {/* Tax & Compliance Card */}
+              <section className="cardCls">
+                <h3 className="font-headline-md text-headline-md text-primary mb-6 flex items-center gap-2 border-b border-outline-variant pb-4">
+                  <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>verified_user</span>
+                  Tax & Compliance
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-stack-md">
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="gstin">
+                      <span>GSTIN</span>
+                      <span className="text-xs font-normal text-on-surface-variant">· 15 digits</span>
+                    </label>
+                    <input className={monoInputCls} id="gstin" placeholder="e.g. 22AAAAA0000A1Z5" type="text" value={form.gstin} onChange={set('gstin')} maxLength={15} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="pan">
+                      <span>PAN</span>
+                      <span className="text-xs font-normal text-on-surface-variant">· 10 digits</span>
+                    </label>
+                    <input className={monoInputCls} id="pan" placeholder="e.g. ABCDE1234F" type="text" value={form.pan} onChange={set('pan')} maxLength={10} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="tan">
+                      <span>TAN</span>
+                      <span className="text-xs font-normal text-on-surface-variant">· 10 digits</span>
+                    </label>
+                    <input className={monoInputCls} id="tan" placeholder="e.g. ABCDE1234F" type="text" value={form.tan} onChange={set('tan')} maxLength={10} />
+                  </div>
+                </div>
+              </section>
             </div>
 
-            {error && (
-              <div className="mb-stack-md px-3 py-2 rounded-lg bg-error-container text-on-error-container font-body-md text-body-md">{error}</div>
-            )}
-
-            {loading ? (
-              <div className="py-16 text-center font-body-md text-body-md text-on-surface-variant">Loading client…</div>
-            ) : (
-              <form id="client-form" onSubmit={handleSubmit} className="space-y-2">
-                {/* Section 1: Basic Information */}
-                <section className="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 shadow-sm">
-                  <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md flex items-center gap-2 border-b border-surface-variant pb-3">
-                    <span className="material-symbols-outlined text-primary">corporate_fare</span>
-                    Basic Information
-                  </h3>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div>
-                      <label className={labelCls} htmlFor="clientType">Assessee Type</label>
-                      <select className={selectCls} id="clientType" value={form.client_type} onChange={set('client_type')}>
-                        {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelCls} htmlFor="legalName">Name <span className="text-error">*</span> <span className="font-normal text-on-surface-variant">(as per PAN/GSTIN)</span></label>
-                      <input className={inputCls} id="legalName" placeholder="Enter name as registered" required type="text" value={form.name} onChange={set('name')} />
-                    </div>
-                    <div>
-                      <label className={labelCls} htmlFor="contactPerson">Primary Contact Person</label>
-                      <input className={inputCls} id="contactPerson" placeholder="Full name" type="text" value={form.contact_person} onChange={set('contact_person')} />
-                    </div>
-                  </div>
-                </section>
-
-                {/* Section 2: Contact Details */}
-                <section className="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 shadow-sm">
-                  <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md flex items-center gap-2 border-b border-surface-variant pb-3">
-                    <span className="material-symbols-outlined text-primary">contacts</span>
-                    Contact Details
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelCls} htmlFor="email">Email Address</label>
-                      <input className={inputCls} id="email" placeholder="contact@company.com" type="email" value={form.email} onChange={set('email')} />
-                    </div>
-                    <div>
-                      <label className={labelCls} htmlFor="phone">Phone Number <span className="text-error">*</span></label>
-                      <input className={inputCls} id="phone" placeholder="+91 00000 00000" type="tel" required value={form.phone} onChange={set('phone')} />
-                    </div>
-                  </div>
-                </section>
-
-                {/* Section 3: Billing Address */}
-                <section className="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 shadow-sm">
-                  <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md flex items-center gap-2 border-b border-surface-variant pb-3">
-                    <span className="material-symbols-outlined text-primary">location_on</span>
-                    Billing Address
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                    <div className="md:col-span-6">
-                      <label className={labelCls} htmlFor="streetAddress">Street Address</label>
-                      <input className={inputCls} id="streetAddress" placeholder="Building, Street, Area" type="text" value={form.address_line1} onChange={set('address_line1')} />
-                    </div>
-                    <div className="md:col-span-3">
-                      <label className={labelCls} htmlFor="addressLine2">Address Line 2</label>
-                      <input className={inputCls} id="addressLine2" placeholder="Suite, Floor, Landmark" type="text" value={form.address_line2} onChange={set('address_line2')} />
-                    </div>
-                    <div className="md:col-span-3">
-                      <label className={labelCls} htmlFor="city">City</label>
-                      <input className={inputCls} id="city" placeholder="City" type="text" value={form.city} onChange={set('city')} />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className={labelCls} htmlFor="state">State</label>
-                      <select className={inputCls} id="state" value={form.state} onChange={set('state')}>
-                        <option value="">Select state</option>
-                        {['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh','Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir','Ladakh','Lakshadweep','Puducherry'].map((s) => (
-                          <option key={s} value={s}>{s}</option>
+            {/* Secondary Info Column (4 cols) */}
+            <div className="lg:col-span-4 space-y-stack-md">
+              {/* Management & Services Card */}
+              <section className="cardCls">
+                <h3 className="font-headline-md text-headline-md text-primary mb-4 border-b border-outline-variant pb-4">Management &amp; Services</h3>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls} htmlFor="managedBy">Managed By</label>
+                    <div className="relative">
+                      <select className={selectCls} id="managedBy" value={form.assigned_to} onChange={set('assigned_to')}>
+                        <option value="">Unassigned</option>
+                        {members.map((m) => (
+                          <option key={m.id} value={m.id}>{m.full_name} ({ROLE_LABELS[m.role] || m.role})</option>
                         ))}
                       </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className={labelCls} htmlFor="zipCode">ZIP/Postal Code</label>
-                      <input className={inputCls} id="zipCode" placeholder="PIN Code" type="text" value={form.pincode} onChange={set('pincode')} maxLength={6} />
+                      <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">expand_more</span>
                     </div>
                   </div>
-                </section>
 
-                {/* Section 4: Tax & Compliance */}
-                <section className="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 shadow-sm relative overflow-hidden">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary-container"></div>
-                  <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md flex items-center gap-2 border-b border-surface-variant pb-3 pl-2">
-                    <span className="material-symbols-outlined text-primary">verified_user</span>
-                    Tax & Compliance
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pl-2">
-                    <div>
-                      <label className="font-label-md text-label-md text-on-surface block mb-unit flex items-center justify-between" htmlFor="gstin">
-                        <span>GSTIN</span>
-                        <span className="text-xs font-normal text-on-surface-variant">15-digit alphanumeric</span>
-                      </label>
-                      <input className={monoInputCls} id="gstin" placeholder="e.g. 22AAAAA0000A1Z5" type="text" value={form.gstin} onChange={set('gstin')} maxLength={15} />
+                  {/* Services Opted */}
+                  <div className="flex flex-col gap-1">
+                    <label className={labelCls}>Services Opted</label>
+                    <div className="flex flex-wrap gap-2 p-2 bg-surface-container-low border border-outline-variant rounded-DEFAULT min-h-[42px]">
+                      {selectedServices.length === 0 && (
+                        <span className="font-body-md text-body-md text-on-surface-variant">None selected</span>
+                      )}
+                      {selectedServices.map((s) => (
+                        <span key={s.id} className="flex items-center gap-1 px-2 py-1 bg-primary text-white rounded-full text-[12px] font-medium">
+                          {s.name}
+                          <button
+                            type="button"
+                            className="hover:text-white/70"
+                            title="Remove"
+                            onClick={() => toggleService(s.id)}
+                          >
+                            <span className="material-symbols-outlined text-[14px]">close</span>
+                          </button>
+                        </span>
+                      ))}
                     </div>
-                    <div>
-                      <label className="font-label-md text-label-md text-on-surface block mb-unit flex items-center justify-between" htmlFor="pan">
-                        <span>PAN</span>
-                        <span className="text-xs font-normal text-on-surface-variant">10-digit alphanumeric</span>
-                      </label>
-                      <input className={monoInputCls} id="pan" placeholder="e.g. ABCDE1234F" type="text" value={form.pan} onChange={set('pan')} maxLength={10} />
-                    </div>
-                    <div>
-                      <label className="font-label-md text-label-md text-on-surface block mb-unit flex items-center justify-between" htmlFor="tan">
-                        <span>TAN</span>
-                        <span className="text-xs font-normal text-on-surface-variant">10-digit alphanumeric</span>
-                      </label>
-                      <input className={monoInputCls} id="tan" placeholder="e.g. ABCDE1234F" type="text" value={form.tan} onChange={set('tan')} maxLength={10} />
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setServicesOpen((o) => !o)}
+                        className="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-DEFAULT font-body-md text-body-md text-primary flex justify-between items-center cursor-pointer hover:border-inverse-surface transition-all"
+                      >
+                        <span>{servicesOpen ? 'Close' : 'Manage services...'}</span>
+                        <span className="material-symbols-outlined text-on-surface-variant">expand_more</span>
+                      </button>
+                      {servicesOpen && (
+                        <div className="absolute top-full left-0 w-full mt-1 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg z-50 overflow-hidden max-h-64 overflow-y-auto">
+                          {SERVICE_CATEGORY_ORDER.map((cat) => {
+                            const catServices = services.filter((s) => s.category === cat);
+                            if (!catServices.length) return null;
+                            return (
+                              <div key={cat}>
+                                <div className="p-2 border-b border-outline-variant bg-surface-container-low">
+                                  <span className="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant">{SERVICE_CATEGORY_LABELS[cat] || cat}</span>
+                                </div>
+                                {catServices.map((s) => {
+                                  const checked = serviceIds.includes(s.id);
+                                  return (
+                                    <div
+                                      key={s.id}
+                                      className={`p-2 hover:bg-surface-container cursor-pointer text-body-md flex items-center justify-between ${checked ? 'bg-surface-container-low' : ''}`}
+                                      onClick={() => toggleService(s.id)}
+                                    >
+                                      <span>{s.name}</span>
+                                      <span className={`material-symbols-outlined text-[18px] ${checked ? 'text-primary' : 'text-on-surface-variant'}`}>
+                                        {checked ? 'check_box' : 'check_box_outline_blank'}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                          {services.length === 0 && (
+                            <div className="p-4 text-center font-body-md text-body-md text-on-surface-variant">No services found. Add them in Settings → Services.</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </section>
+                </div>
+              </section>
 
-                {/* Section 5: Status & Notes */}
-                <section className="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 shadow-sm">
-                  <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md flex items-center gap-2 border-b border-surface-variant pb-3">
-                    <span className="material-symbols-outlined text-primary">flag</span>
-                    Status & Notes
-                  </h3>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div>
-                      <label className={labelCls} htmlFor="status">Status</label>
-                      <select className={selectCls} id="status" value={form.status} onChange={set('status')}>
-                        {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className={labelCls} htmlFor="notes">Notes</label>
-                      <textarea className={`${inputCls} h-24 resize-none`} id="notes" placeholder="Additional notes about this client..." value={form.notes} onChange={set('notes')} />
-                    </div>
-                  </div>
-                </section>
-              </form>
-            )}
+              {/* Client Status Card */}
+              <section className="cardCls">
+                <h3 className="font-headline-md text-headline-md text-primary mb-4">Client Status</h3>
+                <div className="flex flex-col gap-1">
+                  <label className={labelCls} htmlFor="status">Status</label>
+                  <select className={selectCls} id="status" value={form.status} onChange={set('status')}>
+                    {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              </section>
+
+              {/* Internal Notes Card */}
+              <section className="cardCls">
+                <h3 className="font-headline-md text-headline-md text-primary mb-4 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-on-surface-variant" style={{ fontVariationSettings: "'FILL' 0" }}>speaker_notes</span>
+                  Internal Notes
+                </h3>
+                <textarea
+                  className="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-DEFAULT font-body-md text-body-md text-primary focus:outline-none focus:border-inverse-surface focus:border-2 transition-all resize-none"
+                  rows="5"
+                  placeholder="Additional notes about this client..."
+                  value={form.notes}
+                  onChange={set('notes')}
+                />
+              </section>
+            </div>
           </div>
-        </div>
-      </main>
+        </form>
+      )}
     </div>
   );
 }

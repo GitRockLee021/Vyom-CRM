@@ -59,6 +59,17 @@ CREATE TABLE services (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ---------- Client services (many-to-many: services opted into) ----------
+CREATE TABLE client_services (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id  UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (client_id, service_id)
+);
+CREATE INDEX idx_client_services_client ON client_services (client_id);
+CREATE INDEX idx_client_services_service ON client_services (service_id);
+
 -- ---------- Engagements (service jobs per client) ----------
 CREATE TABLE engagements (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),

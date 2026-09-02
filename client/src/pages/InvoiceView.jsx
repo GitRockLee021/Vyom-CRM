@@ -53,7 +53,7 @@ export default function InvoiceView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center py-16">
         <p className="font-body-md text-body-md text-on-surface-variant">Loading invoice…</p>
       </div>
     );
@@ -61,7 +61,7 @@ export default function InvoiceView() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+      <div className="flex flex-col items-center justify-center gap-4 py-16">
         <p className="font-body-md text-body-md text-error">{error}</p>
         <button onClick={() => navigate('/invoices')} className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90">
           Back to Billing
@@ -71,8 +71,8 @@ export default function InvoiceView() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="bg-surface-container-lowest border-b border-outline-variant w-full h-16 sticky top-0 z-30 flex items-center justify-between px-container-padding">
+    <div>
+      <div className="flex items-center justify-between mb-stack-md">
         <button
           onClick={() => navigate('/invoices')}
           className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors"
@@ -90,7 +90,7 @@ export default function InvoiceView() {
         </button>
       </div>
 
-      <div className="p-container-padding flex justify-center">
+      <div className="flex justify-center">
         <div id="invoice-printable" style={{ width: 700, maxWidth: '100%' }}>
           <InvoiceDocument invoice={invoice} company={company} />
         </div>

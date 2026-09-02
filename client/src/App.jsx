@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
+import Layout from './components/Layout.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Clients from './pages/Clients.jsx';
 import ClientForm from './pages/ClientForm.jsx';
@@ -53,21 +54,25 @@ export default function App() {
       />
       <Route path="/invite" element={<AcceptInvite />} />
 
-      <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
-      <Route path="/clients" element={<RequireAuth><Clients /></RequireAuth>} />
-      <Route path="/clients/new" element={<RequireAuth><ClientForm /></RequireAuth>} />
-      <Route path="/clients/:id/edit" element={<RequireAuth><ClientForm /></RequireAuth>} />
-      <Route path="/invoices" element={<RequireAuth><Billing /></RequireAuth>} />
-      <Route path="/invoices/new" element={<RequireAuth><InvoiceForm /></RequireAuth>} />
-      <Route path="/invoices/:id/edit" element={<RequireAuth><InvoiceForm /></RequireAuth>} />
-      <Route path="/invoice/:id" element={<RequireAuth><InvoiceView /></RequireAuth>} />
-      <Route path="/payments/new" element={<RequireAuth><RecordPayment /></RequireAuth>} />
-      <Route path="/invoices/:id/pay" element={<RequireAuth><RecordPayment /></RequireAuth>} />
-      <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
-      <Route path="/settings/roles" element={<RequireAuth><Roles /></RequireAuth>} />
-      <Route path="/settings/team" element={<RequireAuth><Team /></RequireAuth>} />
+      <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
+        <Route index element={<Dashboard />} />
+        <Route path="clients" element={<Clients />} />
+        <Route path="clients/new" element={<ClientForm />} />
+        <Route path="clients/:id/edit" element={<ClientForm />} />
+        <Route path="invoices" element={<Billing />} />
+        <Route path="invoices/new" element={<InvoiceForm />} />
+        <Route path="invoices/:id/edit" element={<InvoiceForm />} />
+        <Route path="invoice/:id" element={<InvoiceView />} />
+        <Route path="payments/new" element={<RecordPayment />} />
+        <Route path="invoices/:id/pay" element={<RecordPayment />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="settings/roles" element={<Roles />} />
+        <Route path="settings/team" element={<Team />} />
+      </Route>
 
-      <Route path="*" element={<RequireAuth><Dashboard /></RequireAuth>} />
+      <Route path="*" element={<RequireAuth><Layout /></RequireAuth>}>
+        <Route index element={<Dashboard />} />
+      </Route>
     </Routes>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
-import { useSettings } from '../hooks/useSettings.js';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../hooks/useSettings.js';
 
 const NAV_ITEMS = [
@@ -8,6 +8,12 @@ const NAV_ITEMS = [
   { to: '/clients', label: 'Clients', icon: 'group' },
   { to: '/invoices', label: 'Billing', icon: 'receipt_long' },
   { label: 'Settings', icon: 'settings' },
+];
+
+const SETTINGS_ITEMS = [
+  { label: 'Company Information', to: '/settings' },
+  { label: 'Team Members', to: '/settings/team' },
+  { label: 'Roles & Permissions', to: '/settings/roles' },
 ];
 
 const FOOTER_ITEMS = [
@@ -20,6 +26,12 @@ const ACTIVE_CLASSES =
 
 const INACTIVE_CLASSES =
   'text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg';
+
+const SUB_ACTIVE_CLASSES =
+  'block px-3 py-1.5 rounded-lg text-primary font-bold bg-secondary-fixed/30 dark:bg-secondary-container/40 border-r-4 border-primary font-label-md text-label-md';
+
+const SUB_INACTIVE_CLASSES =
+  'block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md';
 
 function FilledIcon({ name, filled = false }) {
   return (
@@ -34,7 +46,19 @@ function FilledIcon({ name, filled = false }) {
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const settings = useSettings();
+  const { logout, user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const isSettingsActive = location.pathname.startsWith('/settings');
+  const isSettingsExpanded = settingsOpen || isSettingsActive;
+
+  function handleLogout() {
+    logout();
+    navigate('/login', { replace: true });
+  }
 
   return (
     <div className="bg-background font-body-md text-body-md text-on-background flex h-screen overflow-hidden">
@@ -45,11 +69,13 @@ export default function Layout() {
         />
       )}
 
+      {/* SideNavBar */}
       <nav
-        className={`bg-surface border-r border-outline-variant w-64 h-screen fixed left-0 top-0 z-40 flex-col py-stack-md px-4 transition-transform duration-200 ease-in-out ${
+        className={`bg-surface dark:bg-background border-r border-outline-variant dark:border-outline w-64 h-screen fixed left-0 top-0 z-40 flex flex-col h-full py-stack-md px-4 transition-transform duration-200 ease-in-out ${
           mobileOpen ? 'flex translate-x-0' : '-translate-x-full'
         } md:flex md:translate-x-0`}
       >
+        {/* Brand/Header */}
         <div className="mb-stack-lg flex items-center gap-3 px-2">
           <div className="w-10 h-10 rounded bg-primary-container flex items-center justify-center shrink-0">
             <span
@@ -60,51 +86,102 @@ export default function Layout() {
             </span>
           </div>
           <div>
-            <h2 className="font-headline-sm text-headline-sm text-primary break-words leading-tight">{settings?.company_name || 'Vyom CRM'}</h2>
+            <h2 className="font-headline-sm text-headline-sm text-primary break-words leading-tight">
+              {settings?.company_name || 'Vyom CRM'}
+            </h2>
           </div>
         </div>
 
-        <ul className="flex flex-col gap-1 flex-grow">
-          {NAV_ITEMS.map((item) => (
-            <li key={item.label}>
-              {item.to ? (
-                <NavLink
-                  to={item.to}
-                  end={item.end}
-                  onClick={() => setMobileOpen(false)}
-                  className={({ isActive }) => (isActive ? ACTIVE_CLASSES : INACTIVE_CLASSES)}
-                >
-                  {({ isActive }) => (
-                    <>
-                      <FilledIcon name={item.icon} filled={isActive} />
-                      {item.label}
-                    </>
+        <nav className="flex flex-col gap-1 flex-grow">
+          {NAV_ITEMS.map((item) => {
+            if (!item.to) {
+              const active = isSettingsActive;
+              return (
+                <div key={item.label} className="flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() => setSettingsOpen((v) => !v)}
+                    className={`w-full ${active ? ACTIVE_CLASSES : INACTIVE_CLASSES}`}
+                  >
+                    <FilledIcon name={item.icon} filled={active} />
+                    {item.label}
+                    <span
+                      className={`material-symbols-outlined text-sm ml-auto transition-transform duration-200 ${
+                        isSettingsExpanded ? 'rotate-180' : ''
+                      }`}
+                    >
+                      expand_more
+                    </span>
+                  </button>
+                  {isSettingsExpanded && (
+                    <ul className="ml-6 mt-1 space-y-1 mb-1 border-l border-outline-variant dark:border-outline pl-3">
+                      {SETTINGS_ITEMS.map((sub) => {
+                        const subActive = location.pathname === sub.to;
+                        return (
+                          <li key={sub.label}>
+                            <NavLink
+                              to={sub.to}
+                              onClick={() => setMobileOpen(false)}
+                              className={subActive ? SUB_ACTIVE_CLASSES : SUB_INACTIVE_CLASSES}
+                            >
+                              {sub.label}
+                            </NavLink>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   )}
-                </NavLink>
+                </div>
+              );
+            }
+
+            return (
+              <NavLink
+                key={item.label}
+                to={item.to}
+                end={item.end}
+                onClick={() => setMobileOpen(false)}
+                className={({ isActive }) => (isActive ? ACTIVE_CLASSES : INACTIVE_CLASSES)}
+              >
+                {({ isActive }) => (
+                  <>
+                    <FilledIcon name={item.icon} filled={isActive} />
+                    {item.label}
+                  </>
+                )}
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        {/* Footer Links */}
+        <ul className="flex flex-col gap-1 mt-auto pt-stack-md border-t border-outline-variant dark:border-outline">
+          {FOOTER_ITEMS.map((item) => (
+            <li key={item.label}>
+              {item.label === 'Logout' ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className={`w-full ${INACTIVE_CLASSES}`}
+                >
+                  <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
+                  {item.label}
+                </button>
               ) : (
                 <a href="#" onClick={(e) => e.preventDefault()} className={INACTIVE_CLASSES}>
-                  <FilledIcon name={item.icon} />
+                  <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
                   {item.label}
                 </a>
               )}
             </li>
           ))}
         </ul>
-
-        <ul className="flex flex-col gap-1 mt-auto pt-stack-md border-t border-outline-variant">
-          {FOOTER_ITEMS.map((item) => (
-            <li key={item.label}>
-              <a href="#" onClick={(e) => e.preventDefault()} className={INACTIVE_CLASSES}>
-                <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
-                {item.label}
-              </a>
-            </li>
-          ))}
-        </ul>
       </nav>
 
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col md:ml-64 w-full relative h-screen overflow-hidden">
-        <header className="bg-surface-container-lowest border-b border-outline-variant w-full h-16 sticky top-0 z-30 font-body-md text-body-md text-primary flex items-center justify-between px-container-padding">
+        {/* TopNavBar */}
+        <header className="bg-surface-container-lowest dark:bg-inverse-surface border-b border-outline-variant dark:border-outline w-full h-16 sticky top-0 z-30 font-body-md text-body-md text-primary dark:text-primary-fixed flex items-center justify-between px-container-padding">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
@@ -113,7 +190,7 @@ export default function Layout() {
             <span className="material-symbols-outlined">menu</span>
           </button>
 
-          <div className="md:hidden font-headline-md text-headline-md font-bold text-primary mr-auto">
+          <div className="md:hidden font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed mr-auto">
             {settings?.company_name || 'Vyom CRM'}
           </div>
 
@@ -150,17 +227,16 @@ export default function Layout() {
               className="flex items-center gap-2 p-1 pl-2 hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80"
             >
               <span className="font-label-md text-label-md text-on-surface font-semibold hidden lg:block">
-                Profile
+                {user?.full_name || 'Profile'}
               </span>
-              <img
-                alt="User profile avatar"
-                className="w-8 h-8 rounded-full object-cover border border-outline-variant"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1jIf_HSiK-R2jO3o2JucWONqLA7KE0qvbODrUY2MDdOUrBKaNpTMA45SEArezHgClC3m2xd_VEyeTn8nmIOGDtp2v4WWwsgdnpVCm2-Zl-kc8FmM9E180F1AQ6XfbdqeRT8Q796oQIVSFqwxXJvAVHje77XqGLOHwp_z37c9AeBvMiLeC3x_d7Sp33LnwNsPOQg8tRLPVT651a2JY193bSgoz8goplsgxZfH6gHrwyuLN9-yUn74"
-              />
+              <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center">
+                <span className="material-symbols-outlined text-sm">person</span>
+              </div>
             </button>
           </div>
         </header>
 
+        {/* Page Content */}
         <main className="flex-1 overflow-y-auto bg-background p-container-padding">
           <div className="max-w-[1440px] mx-auto">
             <Outlet />
