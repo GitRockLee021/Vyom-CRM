@@ -7,6 +7,7 @@ import Billing from './pages/Billing.jsx';
 import InvoiceForm from './pages/InvoiceForm.jsx';
 import InvoiceView from './pages/InvoiceView.jsx';
 import RecordPayment from './pages/RecordPayment.jsx';
+import Payments from './pages/Payments.jsx';
 import Settings from './pages/Settings.jsx';
 import Roles from './pages/Roles.jsx';
 import Team from './pages/Team.jsx';
@@ -63,6 +64,7 @@ export default function App() {
         <Route path="invoices/new" element={<InvoiceForm />} />
         <Route path="invoices/:id/edit" element={<InvoiceForm />} />
         <Route path="invoice/:id" element={<InvoiceView />} />
+        <Route path="payments" element={<Payments />} />
         <Route path="payments/new" element={<RecordPayment />} />
         <Route path="invoices/:id/pay" element={<RecordPayment />} />
         <Route path="settings" element={<Settings />} />

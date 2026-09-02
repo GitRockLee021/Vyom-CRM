@@ -1,0 +1,297 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useFetch } from '../hooks/useFetch.js';
+import { usePerm } from '../hooks/usePerm.js';
+
+const PAGE_SIZE = 10;
+
+const METHOD_OPTIONS = [
+  { value: '', label: 'All Methods' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'cheque', label: 'Cheque' },
+  { value: 'card', label: 'Card' },
+];
+
+const METHOD_LABELS = {
+  bank_transfer: 'Bank Transfer',
+  upi: 'UPI',
+  cash: 'Cash',
+  cheque: 'Cheque',
+  card: 'Card',
+};
+
+const METHOD_BADGE = {
+  bank_transfer: 'bg-blue-50 text-blue-700',
+  upi: 'bg-purple-50 text-purple-700',
+  cash: 'bg-green-50 text-green-700',
+  cheque: 'bg-amber-50 text-amber-700',
+  card: 'bg-indigo-50 text-indigo-700',
+};
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function fmtCurrency(n) {
+  const num = Number(n) || 0;
+  return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export default function Payments() {
+  const navigate = useNavigate();
+  const can = usePerm();
+  const { data, error, loading } = useFetch('/payments');
+
+  const [search, setSearch] = useState('');
+  const [methodFilter, setMethodFilter] = useState('');
+  const [page, setPage] = useState(1);
+
+  const payments = Array.isArray(data) ? data : [];
+
+  useEffect(() => { setPage(1); }, [search, methodFilter]);
+
+  const metrics = useMemo(() => {
+    let totalCollected = 0;
+    let totalCount = payments.length;
+    const byMethod = {};
+    for (const p of payments) {
+      totalCollected += Number(p.amount) || 0;
+      const m = p.method || 'other';
+      byMethod[m] = (byMethod[m] || 0) + 1;
+    }
+    return { totalCollected, totalCount, byMethod };
+  }, [payments]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return payments.filter((p) => {
+      if (methodFilter && p.method !== methodFilter) return false;
+      if (!q) return true;
+      return (
+        (p.client_name || '').toLowerCase().includes(q) ||
+        (p.invoice_number || '').toLowerCase().includes(q) ||
+        (p.reference_no || '').toLowerCase().includes(q)
+      );
+    });
+  }, [payments, search, methodFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * PAGE_SIZE;
+  const rows = filtered.slice(start, start + PAGE_SIZE);
+
+  function pageList(total, current) {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const wanted = new Set([1, 2, total, current - 1, current, current + 1].filter((p) => p >= 1 && p <= total));
+    const sorted = [...wanted].sort((a, b) => a - b);
+    const out = [];
+    sorted.forEach((p, i) => {
+      if (i && p - sorted[i - 1] > 1) out.push('…');
+      out.push(p);
+    });
+    return out;
+  }
+
+  return (
+    <div className="max-w-[1440px] mx-auto space-y-stack-lg">
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="font-headline-lg text-headline-lg text-on-surface">Payments</h2>
+          <p className="font-body-md text-body-md text-on-surface-variant mt-1">View all recorded payments across invoices.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {can('billing.record_payment') && (
+            <button
+              type="button"
+              onClick={() => navigate('/payments/new')}
+              className="bg-primary text-on-primary font-label-md text-label-md py-2.5 px-5 rounded flex items-center gap-2 hover:opacity-90 transition-opacity whitespace-nowrap"
+            >
+              <span className="material-symbols-outlined text-sm">payments</span>
+              Record Payment
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md flex flex-col justify-between hover:shadow-[0px_2px_4px_rgba(0,0,0,0.05)] transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <span className="font-label-md text-label-md text-on-surface-variant uppercase">Total Collected</span>
+            <div className="w-8 h-8 rounded bg-primary-container/10 flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined text-sm">currency_rupee</span>
+            </div>
+          </div>
+          <span className="font-headline-lg text-headline-lg text-on-surface">₹{fmtCurrency(metrics.totalCollected)}</span>
+        </div>
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md flex flex-col justify-between hover:shadow-[0px_2px_4px_rgba(0,0,0,0.05)] transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <span className="font-label-md text-label-md text-on-surface-variant uppercase">Total Payments</span>
+            <div className="w-8 h-8 rounded bg-secondary-container/10 flex items-center justify-center text-secondary">
+              <span className="material-symbols-outlined text-sm">receipt_long</span>
+            </div>
+          </div>
+          <span className="font-headline-lg text-headline-lg text-on-surface">{metrics.totalCount}</span>
+        </div>
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md flex flex-col justify-between hover:shadow-[0px_2px_4px_rgba(0,0,0,0.05)] transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <span className="font-label-md text-label-md text-on-surface-variant uppercase">Bank Transfers</span>
+            <div className="w-8 h-8 rounded bg-tertiary-container/10 flex items-center justify-center text-tertiary">
+              <span className="material-symbols-outlined text-sm">account_balance</span>
+            </div>
+          </div>
+          <span className="font-headline-lg text-headline-lg text-on-surface">{metrics.byMethod.bank_transfer || 0}</span>
+        </div>
+      </div>
+
+      {/* Table Section */}
+      <div className="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden flex flex-col shadow-sm">
+        {/* Table Toolbar */}
+        <div className="p-stack-md border-b border-outline-variant bg-surface-bright flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="relative w-full sm:w-64">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
+            <input
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded pl-9 pr-3 py-1.5 font-body-md text-body-md focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+              placeholder="Search payments..."
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label htmlFor="method-filter" className="font-label-md text-label-md text-on-surface-variant whitespace-nowrap">Method:</label>
+            <select
+              id="method-filter"
+              value={methodFilter}
+              onChange={(e) => setMethodFilter(e.target.value)}
+              className="bg-surface-container-lowest border border-outline-variant rounded px-3 py-1.5 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+            >
+              {METHOD_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-surface-container-low font-label-md text-label-md text-on-surface-variant border-b border-outline-variant">
+              <tr>
+                <th className="p-4 font-semibold uppercase tracking-wider">Client</th>
+                <th className="p-4 font-semibold uppercase tracking-wider">Invoice #</th>
+                <th className="p-4 font-semibold uppercase tracking-wider text-right">Amount (₹)</th>
+                <th className="p-4 font-semibold uppercase tracking-wider">Method</th>
+                <th className="p-4 font-semibold uppercase tracking-wider">Reference</th>
+                <th className="p-4 font-semibold uppercase tracking-wider">Date</th>
+              </tr>
+            </thead>
+            <tbody className="font-body-md text-body-md text-on-surface divide-y divide-outline-variant bg-surface-container-lowest">
+              {loading && (
+                <tr>
+                  <td className="p-4 text-on-surface-variant" colSpan="6">Loading payments…</td>
+                </tr>
+              )}
+              {!loading && error && (
+                <tr>
+                  <td className="p-4 text-error" colSpan="6">{error}</td>
+                </tr>
+              )}
+              {!loading && !error && !rows.length && (
+                <tr>
+                  <td className="p-4 text-on-surface-variant" colSpan="6">
+                    {filtered.length ? 'No payments on this page.' : payments.length ? 'No payments match your filters.' : 'No payments recorded yet. Click "Record Payment" to get started.'}
+                  </td>
+                </tr>
+              )}
+              {!loading && !error && rows.map((p, i) => (
+                <tr key={p.id} className={`hover:bg-surface-bright transition-colors ${i % 2 === 1 ? 'bg-background' : ''}`}>
+                  <td className="p-4">
+                    {can('clients.edit') ? (
+                      <button
+                        type="button"
+                        className="cursor-pointer font-medium text-on-surface hover:text-secondary transition-colors"
+                        onClick={() => navigate(`/clients/${p.client_id}/edit`)}
+                      >
+                        {p.client_name}
+                      </button>
+                    ) : (
+                      <span className="font-medium text-on-surface">{p.client_name}</span>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    <a
+                      href={`/invoice/${p.invoice_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-data-mono text-data-mono text-primary font-medium hover:underline cursor-pointer"
+                    >
+                      {p.invoice_number}
+                    </a>
+                  </td>
+                  <td className="p-4 font-data-mono text-data-mono text-right">{fmtCurrency(p.amount)}</td>
+                  <td className="p-4">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded font-label-md text-label-md ${METHOD_BADGE[p.method] || 'bg-gray-50 text-gray-700'}`}>
+                      {METHOD_LABELS[p.method] || p.method}
+                    </span>
+                  </td>
+                  <td className="p-4 text-on-surface-variant font-data-mono text-data-mono">{p.reference_no || '—'}</td>
+                  <td className="p-4 text-on-surface-variant">{fmtDate(p.paid_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="p-4 border-t border-outline-variant bg-surface-bright flex items-center justify-between">
+          <span className="font-body-md text-body-md text-on-surface-variant">
+            {filtered.length
+              ? `Showing ${start + 1} to ${Math.min(start + PAGE_SIZE, filtered.length)} of ${filtered.length} payments`
+              : 'No entries'}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => setPage(safePage - 1)}
+            >
+              <span className="material-symbols-outlined text-sm">chevron_left</span>
+            </button>
+            {pageList(totalPages, safePage).map((p, i) =>
+              p === '…' ? (
+                <span key={`gap-${i}`} className="px-2 text-on-surface-variant">…</span>
+              ) : (
+                <button
+                  key={p}
+                  type="button"
+                  className={`px-3 py-1 border rounded font-label-md text-label-md transition-colors ${
+                    p === safePage
+                      ? 'border-primary bg-primary text-on-primary'
+                      : 'border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low'
+                  }`}
+                  onClick={() => setPage(p)}
+                >
+                  {p}
+                </button>
+              )
+            )}
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => setPage(safePage + 1)}
+            >
+              <span className="material-symbols-outlined text-sm">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

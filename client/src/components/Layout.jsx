@@ -6,8 +6,13 @@ import { useSettings } from '../hooks/useSettings.js';
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: 'dashboard', end: true },
   { to: '/clients', label: 'Clients', icon: 'group' },
-  { to: '/invoices', label: 'Billing', icon: 'receipt_long' },
+  { label: 'Billing', icon: 'receipt_long' },
   { label: 'Settings', icon: 'settings' },
+];
+
+const BILLING_ITEMS = [
+  { label: 'Invoices', to: '/invoices' },
+  { label: 'Payments', to: '/payments' },
 ];
 
 const SETTINGS_ITEMS = [
@@ -46,11 +51,15 @@ function FilledIcon({ name, filled = false }) {
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [billingOpen, setBillingOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settings = useSettings();
   const { logout, user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const isBillingActive = location.pathname.startsWith('/invoices') || location.pathname.startsWith('/payments');
+  const isBillingExpanded = billingOpen || isBillingActive;
 
   const isSettingsActive = location.pathname.startsWith('/settings');
   const isSettingsExpanded = settingsOpen || isSettingsActive;
@@ -95,27 +104,32 @@ export default function Layout() {
         <nav className="flex flex-col gap-1 flex-grow">
           {NAV_ITEMS.map((item) => {
             if (!item.to) {
-              const active = isSettingsActive;
+              const isBilling = item.label === 'Billing';
+              const active = isBilling ? isBillingActive : isSettingsActive;
+              const expanded = isBilling ? isBillingExpanded : isSettingsExpanded;
+              const subItems = isBilling ? BILLING_ITEMS : SETTINGS_ITEMS;
+              const setOpen = isBilling ? setBillingOpen : setSettingsOpen;
+
               return (
                 <div key={item.label} className="flex flex-col">
                   <button
                     type="button"
-                    onClick={() => setSettingsOpen((v) => !v)}
+                    onClick={() => setOpen((v) => !v)}
                     className={`w-full ${active ? ACTIVE_CLASSES : INACTIVE_CLASSES}`}
                   >
                     <FilledIcon name={item.icon} filled={active} />
                     {item.label}
                     <span
                       className={`material-symbols-outlined text-sm ml-auto transition-transform duration-200 ${
-                        isSettingsExpanded ? 'rotate-180' : ''
+                        expanded ? 'rotate-180' : ''
                       }`}
                     >
                       expand_more
                     </span>
                   </button>
-                  {isSettingsExpanded && (
+                  {expanded && (
                     <ul className="ml-6 mt-1 space-y-1 mb-1 border-l border-outline-variant dark:border-outline pl-3">
-                      {SETTINGS_ITEMS.map((sub) => {
+                      {subItems.map((sub) => {
                         const subActive = location.pathname === sub.to;
                         return (
                           <li key={sub.label}>
