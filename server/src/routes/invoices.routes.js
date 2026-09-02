@@ -63,6 +63,16 @@ async function nextInvoiceNumber(tenantId) {
   return `${prefix}${year}-${seq}`;
 }
 
+// GET /api/invoices/next-number
+router.get('/next-number', requirePerm('billing.view'), async (req, res, next) => {
+  try {
+    const num = await nextInvoiceNumber(req.user.tenant_id);
+    res.json({ invoice_number: num });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/invoices?client_id=&status=&search=
 // Always scoped to the authenticated user's tenant.
 router.get('/', requirePerm('billing.view'), async (req, res, next) => {
@@ -156,6 +166,15 @@ router.post('/', requirePerm('billing.create'), async (req, res, next) => {
 // PUT /api/invoices/:id
 router.put('/:id', requirePerm('billing.edit'), async (req, res, next) => {
   try {
+    const existing = await query(
+      'SELECT status FROM invoices WHERE id = $1 AND tenant_id = $2',
+      [req.params.id, req.user.tenant_id]
+    );
+    if (!existing.rows[0]) throw httpError(404, 'Invoice not found');
+    if (existing.rows[0].status === 'paid') {
+      throw httpError(409, 'Paid invoices cannot be edited');
+    }
+
     const data = pickFields(req.body || {});
     validate(data, { partial: true });
 
@@ -184,6 +203,15 @@ router.put('/:id', requirePerm('billing.edit'), async (req, res, next) => {
 // DELETE /api/invoices/:id
 router.delete('/:id', requirePerm('billing.delete'), async (req, res, next) => {
   try {
+    const existing = await query(
+      'SELECT status FROM invoices WHERE id = $1 AND tenant_id = $2',
+      [req.params.id, req.user.tenant_id]
+    );
+    if (!existing.rows[0]) throw httpError(404, 'Invoice not found');
+    if (existing.rows[0].status === 'paid') {
+      throw httpError(409, 'Paid invoices cannot be deleted');
+    }
+
     const { rowCount } = await query('DELETE FROM invoices WHERE id = $1 AND tenant_id = $2', [
       req.params.id,
       req.user.tenant_id,

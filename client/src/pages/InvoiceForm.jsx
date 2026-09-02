@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { useMockNav } from '../hooks/useMockNav.js';
@@ -46,6 +46,9 @@ export default function InvoiceForm() {
   const { data } = useFetch('/clients');
 
   const [clientSearch, setClientSearch] = useState('');
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [highlightedIdx, setHighlightedIdx] = useState(-1);
+  const clientSearchRef = useRef(null);
   const [selectedClient, setSelectedClient] = useState(null);
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceStatus, setInvoiceStatus] = useState('');
@@ -57,6 +60,10 @@ export default function InvoiceForm() {
   const [terms, setTerms] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [paidInvoice, setPaidInvoice] = useState(false);
 
   const clients = Array.isArray(data) ? data : [];
 
@@ -69,6 +76,10 @@ export default function InvoiceForm() {
         const inv = await res.json().catch(() => null);
         if (!res.ok) throw new Error(inv?.error || `Request failed (${res.status})`);
         if (cancelled) return;
+        if (inv.status === 'paid') {
+          setPaidInvoice(true);
+          return;
+        }
         setSelectedClient({
           id: inv.client_id,
           name: inv.client_name,
@@ -106,11 +117,53 @@ export default function InvoiceForm() {
     return () => { cancelled = true; };
   }, [id, isEdit]);
 
+  useEffect(() => {
+    if (isEdit) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/invoices/next-number', { headers: authHeaders() });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || cancelled) return;
+        setInvoiceNumber(json?.invoice_number || '');
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [isEdit]);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (clientSearchRef.current && !clientSearchRef.current.contains(e.target)) {
+        setShowClientDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const filteredClients = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
-    if (!q) return [];
+    if (!q) return showClientDropdown ? clients.slice(0, 10) : [];
     return clients.filter((c) => (c.name || '').toLowerCase().includes(q)).slice(0, 6);
-  }, [clients, clientSearch]);
+  }, [clients, clientSearch, showClientDropdown]);
+
+  useEffect(() => { setHighlightedIdx(-1); }, [filteredClients]);
+
+  function handleClientKeyDown(e) {
+    if (!showClientDropdown || filteredClients.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIdx((i) => (i < filteredClients.length - 1 ? i + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIdx((i) => (i > 0 ? i - 1 : filteredClients.length - 1));
+    } else if (e.key === 'Enter' && highlightedIdx >= 0) {
+      e.preventDefault();
+      selectClient(filteredClients[highlightedIdx]);
+    } else if (e.key === 'Escape') {
+      setShowClientDropdown(false);
+    }
+  }
 
   const totals = useMemo(() => {
     const subtotal = lineItems.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0);
@@ -126,6 +179,7 @@ export default function InvoiceForm() {
   function selectClient(c) {
     setSelectedClient(c);
     setClientSearch('');
+    setShowClientDropdown(false);
   }
 
   function addLineItem() {
@@ -184,12 +238,49 @@ export default function InvoiceForm() {
     }
   }
 
+  async function confirmDelete() {
+    setDeleting(true);
+    try {
+      await api('DELETE', `/invoices/${id}`);
+      setShowDeleteConfirm(false);
+      setNotice('Invoice deleted successfully.');
+      setTimeout(() => navigate('/invoices'), 800);
+    } catch (err) {
+      setShowDeleteConfirm(false);
+      setNotice(err.message || 'Something went wrong.');
+      setDeleting(false);
+    }
+  }
+
   const inputCls = 'w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary font-body-md text-body-md text-on-surface outline-none';
   const monoCls = 'w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary font-data-mono text-data-mono text-on-surface outline-none';
   const labelCls = 'font-label-md text-label-md text-on-surface-variant block mb-1';
 
   if (!(isEdit ? can('billing.edit') : can('billing.create'))) {
     return <AccessDenied message={isEdit ? "You don't have permission to edit invoices." : "You don't have permission to create invoices."} />;
+  }
+
+  if (isEdit && paidInvoice) {
+    return (
+      <div className="bg-surface font-body-md text-on-surface h-screen flex items-center justify-center p-container-padding">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm w-full max-w-md p-stack-lg text-center">
+          <div className="mx-auto w-12 h-12 rounded-full bg-error-container/40 flex items-center justify-center mb-stack-md">
+            <span className="material-symbols-outlined text-error">lock</span>
+          </div>
+          <h2 className="font-headline-md text-headline-md text-on-surface mb-1">Paid Invoices Cannot Be Edited</h2>
+          <p className="font-body-md text-body-md text-on-surface-variant mb-stack-lg">
+            This invoice has already been paid. Paid invoices are locked and cannot be edited or deleted.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/invoices')}
+            className="px-5 py-2.5 bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:opacity-90 transition-opacity"
+          >
+            Back to Billing
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -333,6 +424,17 @@ export default function InvoiceForm() {
                   <span className="material-symbols-outlined text-[18px]">save</span>
                   {saving ? 'Saving…' : isEdit ? 'Update' : 'Save'}
                 </button>
+                {isEdit && can('billing.delete') && invoiceStatus !== 'paid' && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="px-4 py-2 rounded-lg border border-error/40 text-error font-label-md text-label-md hover:bg-error-container transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                    Delete
+                  </button>
+                )}
                 {isEdit && (
                   <button
                     type="button"
@@ -350,6 +452,10 @@ export default function InvoiceForm() {
               <div className="mb-stack-md px-3 py-2 rounded-lg bg-error-container text-on-error-container font-body-md text-body-md">{error}</div>
             )}
 
+            {notice && (
+              <div className="mb-stack-md px-3 py-2 rounded-lg bg-primary-fixed/40 border border-outline-variant font-body-md text-body-md text-on-surface">{notice}</div>
+            )}
+
             <div className="space-y-stack-lg">
               {/* Information Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
@@ -358,7 +464,7 @@ export default function InvoiceForm() {
                   <div className="flex justify-between items-center mb-stack-md">
                     <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Billed To</label>
                     {!isEdit && (
-                      <button type="button" className="text-secondary font-label-md text-label-md flex items-center gap-1 hover:text-primary transition-colors" onClick={() => navigate('/clients/new')}>
+                      <button type="button" className="text-secondary font-label-md text-label-md flex items-center gap-1 hover:text-primary transition-colors" onClick={() => navigate('/clients/new', { state: { fromInvoice: true } })}>
                         <span className="material-symbols-outlined text-[16px]">person_add</span>
                         New Client
                       </button>
@@ -366,22 +472,33 @@ export default function InvoiceForm() {
                   </div>
 
                   {!selectedClient ? (
-                    <>
+                    <div ref={clientSearchRef}>
                       <div className="relative">
                         <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant">search</span>
                         <input
-                          className="w-full pl-10 pr-4 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:border-secondary focus:ring-1 focus:ring-secondary outline-none font-body-md text-body-md text-on-surface"
+                          className="w-full pl-10 pr-10 py-2 border border-outline-variant rounded-lg bg-surface-container-lowest focus:border-secondary focus:ring-1 focus:ring-secondary outline-none font-body-md text-body-md text-on-surface"
                           placeholder="Search client name..."
                           type="text"
                           value={clientSearch}
-                          onChange={(e) => setClientSearch(e.target.value)}
+                          onChange={(e) => { setClientSearch(e.target.value); setShowClientDropdown(true); }}
+                          onFocus={() => setShowClientDropdown(true)}
+                          onKeyDown={handleClientKeyDown}
                         />
+                        <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-outline-variant hover:text-on-surface transition-colors" onClick={() => { setShowClientDropdown((v) => !v); }}>
+                          <span className="material-symbols-outlined text-[20px]">arrow_drop_down</span>
+                        </button>
                       </div>
                       {filteredClients.length > 0 && (
-                        <ul className="mt-2 border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant max-h-56 overflow-y-auto">
-                          {filteredClients.map((c) => (
-                            <li key={c.id}>
-                              <button type="button" className="w-full text-left px-3 py-2 hover:bg-surface-container-low transition-colors" onClick={() => selectClient(c)}>
+                        <ul className="mt-2 border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant max-h-56 overflow-y-auto" role="listbox">
+                          {filteredClients.map((c, idx) => (
+                            <li key={c.id} role="option" aria-selected={idx === highlightedIdx}>
+                              <button
+                                type="button"
+                                ref={(el) => { if (el && idx === highlightedIdx) el.scrollIntoView({ block: 'nearest' }); }}
+                                className={`w-full text-left px-3 py-2 transition-colors ${idx === highlightedIdx ? 'bg-secondary-container text-on-secondary-container' : 'hover:bg-surface-container-low text-on-surface'}`}
+                                onMouseEnter={() => setHighlightedIdx(idx)}
+                                onClick={() => selectClient(c)}
+                              >
                                 <span className="block font-body-md text-body-md text-on-surface">{c.name}</span>
                                 {c.city && <span className="block text-xs text-on-surface-variant">{c.city}{c.state ? `, ${c.state}` : ''}</span>}
                               </button>
@@ -389,7 +506,7 @@ export default function InvoiceForm() {
                           ))}
                         </ul>
                       )}
-                    </>
+                    </div>
                   ) : (
                     <div className="mt-4 p-4 border border-outline-variant rounded-lg bg-surface-container-low">
                       <div className="flex items-start justify-between">
@@ -415,7 +532,7 @@ export default function InvoiceForm() {
                   <h3 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Invoice Details</h3>
                   <div>
                     <label className={labelCls}>Invoice Number</label>
-                    <input className={`${monoCls} text-on-surface-variant`} readOnly type="text" value={invoiceNumber} placeholder="Auto-generated on save" />
+                    <input className={`${monoCls} text-on-surface-variant`} readOnly type="text" value={invoiceNumber} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -561,6 +678,24 @@ export default function InvoiceForm() {
           </div>
         </div>
       </main>
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl w-full max-w-sm p-container-padding" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Delete Invoice?</h3>
+            <p className="font-body-md text-body-md text-on-surface-variant mb-stack-lg">
+              This will permanently delete <strong className="text-on-surface">{invoiceNumber || 'this invoice'}</strong>. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button type="button" className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+              <button type="button" disabled={deleting} className="px-4 py-2 bg-error text-on-error rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50" onClick={confirmDelete}>
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

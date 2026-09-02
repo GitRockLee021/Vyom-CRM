@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useMockNav } from '../hooks/useMockNav.js';
 import { usePerm } from '../hooks/usePerm.js';
 import { useSettings } from '../hooks/useSettings.js';
@@ -31,7 +31,9 @@ const EMPTY_FORM = {
 
 export default function ClientForm() {
   const navigate = useNavigate();
+  const location = useLocation();
   const handleNav = useMockNav();
+  const fromInvoice = Boolean(location.state?.fromInvoice);
   const settings = useSettings();
   const can = usePerm();
   const { id } = useParams();
@@ -98,7 +100,7 @@ export default function ClientForm() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
-      navigate('/clients');
+      navigate(fromInvoice ? '/invoices/new' : '/clients');
     } catch (err) {
       setError(err.message || 'Something went wrong.');
       setSaving(false);
@@ -220,7 +222,7 @@ export default function ClientForm() {
               <div>
                 <nav aria-label="Breadcrumb" className="flex text-on-surface-variant font-label-md text-label-md mb-2">
                   <ol className="flex items-center space-x-2">
-                    <li><a className="hover:text-primary transition-colors" href="#" onClick={(e) => { e.preventDefault(); navigate('/clients'); }}>Clients</a></li>
+                    <li><a className="hover:text-primary transition-colors" href="#" onClick={(e) => { e.preventDefault(); navigate(fromInvoice ? '/invoices/new' : '/clients'); }}>Clients</a></li>
                     <li><span className="material-symbols-outlined text-sm">chevron_right</span></li>
                     <li aria-current="page" className="text-primary">{isEdit ? 'Edit Client' : 'Add New Client'}</li>
                   </ol>
@@ -229,7 +231,7 @@ export default function ClientForm() {
                 <p className="font-body-md text-body-md text-on-surface-variant mt-1">{isEdit ? 'Updating client record' : 'Enter the details below to onboard a new entity into the CRM.'}</p>
               </div>
               <div className="flex items-center gap-3">
-                <button type="button" onClick={() => navigate('/clients')} className="bg-surface-container-lowest border border-outline-variant text-on-surface font-label-md text-label-md py-2 px-6 rounded-DEFAULT hover:bg-surface-container transition-colors focus:ring-2 focus:ring-outline-variant outline-none">
+                <button type="button" onClick={() => navigate(fromInvoice ? '/invoices/new' : '/clients')} className="bg-surface-container-lowest border border-outline-variant text-on-surface font-label-md text-label-md py-2 px-6 rounded-DEFAULT hover:bg-surface-container transition-colors focus:ring-2 focus:ring-outline-variant outline-none">
                   Cancel
                 </button>
                 <button type="submit" form="client-form" disabled={saving || loading} className="bg-primary text-on-primary font-label-md text-label-md py-2 px-6 rounded-DEFAULT hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm focus:ring-2 focus:ring-primary outline-none flex items-center gap-2 disabled:opacity-50">

@@ -4,6 +4,7 @@ import { useFetch } from '../hooks/useFetch.js';
 import { useMockNav } from '../hooks/useMockNav.js';
 import { usePerm } from '../hooks/usePerm.js';
 import { useSettings } from '../hooks/useSettings.js';
+import { authHeaders } from '../utils/authHeader.js';
 import InvoiceDocument from '../components/InvoiceDocument.jsx';
 
 const PAGE_SIZE = 10;
@@ -40,12 +41,14 @@ export default function Billing() {
   const handleNav = useMockNav();
   const settings = useSettings();
   const can = usePerm();
-  const { data, error, loading } = useFetch('/invoices');
+  const { data, error, loading, reload } = useFetch('/invoices');
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [notice, setNotice] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const invoices = Array.isArray(data) ? data : [];
 
@@ -120,6 +123,28 @@ export default function Billing() {
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
     }).from(el).save();
+  }
+
+  async function confirmDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/invoices/${deleteTarget.id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.error || `Request failed (${res.status})`);
+      }
+      setDeleteTarget(null);
+      reload();
+      setNotice('Invoice deleted successfully.');
+    } catch (err) {
+      setDeleteTarget(null);
+      setNotice(err.message);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -430,6 +455,17 @@ export default function Billing() {
                               >
                                 <span className="material-symbols-outlined text-[18px]">download</span>
                               </button>
+                              {can('billing.delete') && (
+                                <button
+                                  type="button"
+                                  disabled={inv.status === 'paid'}
+                                  className={`text-on-surface-variant transition-colors ${inv.status === 'paid' ? 'opacity-40 cursor-not-allowed' : 'hover:text-error'}`}
+                                  title={inv.status === 'paid' ? 'Paid invoices cannot be deleted' : 'Delete'}
+                                  onClick={() => setDeleteTarget(inv)}
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -497,6 +533,24 @@ export default function Billing() {
           </div>
         </div>
       ))}
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDeleteTarget(null)}>
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl w-full max-w-sm p-container-padding" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Delete Invoice?</h3>
+            <p className="font-body-md text-body-md text-on-surface-variant mb-stack-lg">
+              This will permanently delete <strong className="text-on-surface">{deleteTarget.invoice_number}</strong>. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button type="button" className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button type="button" disabled={deleting} className="px-4 py-2 bg-error text-on-error rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50" onClick={confirmDelete}>
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
