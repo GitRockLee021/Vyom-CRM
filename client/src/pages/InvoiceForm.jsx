@@ -218,7 +218,7 @@ export default function InvoiceForm() {
         client_id: selectedClient.id,
         amount: subtotal,
         gst_rate: gstRate,
-        status,
+        status: isEdit ? invoiceStatus : status,
         issued_date: issuedDate || null,
         due_date: dueDate,
         notes: JSON.stringify({
@@ -235,7 +235,7 @@ export default function InvoiceForm() {
         }),
       };
       await api(isEdit ? 'PUT' : 'POST', isEdit ? `/invoices/${id}` : '/invoices', payload);
-      navigate('/invoices');
+      navigate('/invoices', { state: { notice: isEdit ? 'Invoice updated successfully.' : 'Invoice created successfully.' } });
     } catch (err) {
       setError(err.message || 'Something went wrong.');
       setSaving(false);
@@ -304,6 +304,22 @@ export default function InvoiceForm() {
                 </nav>
                 <h2 className="font-headline-lg text-headline-lg text-on-surface">{isEdit ? 'Edit Invoice' : 'Create Invoice'}</h2>
                 <p className="font-body-md text-body-md text-on-surface-variant mt-1">{isEdit ? 'Updating billing document' : 'Drafting new billing document'}</p>
+                {isEdit && invoiceStatus !== 'paid' && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <label htmlFor="invoice-status" className="font-label-md text-label-md text-on-surface-variant">Status:</label>
+                    <select
+                      id="invoice-status"
+                      value={invoiceStatus}
+                      onChange={(e) => setInvoiceStatus(e.target.value)}
+                      className="px-3 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="sent">Sent</option>
+                      <option value="overdue">Overdue</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-stack-sm">
                 {isEdit && invoiceStatus !== 'draft' && can('billing.record_payment') && (

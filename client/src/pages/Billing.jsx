@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { usePerm } from '../hooks/usePerm.js';
 import { useWhatsApp } from '../hooks/useWhatsApp.js';
@@ -39,6 +39,7 @@ function fmtCurrency(n) {
 
 export default function Billing() {
   const navigate = useNavigate();
+  const location = useLocation();
   const can = usePerm();
   const waConfig = useWhatsApp();
   const { data, error, loading, reload } = useFetch('/invoices');
@@ -59,6 +60,13 @@ export default function Billing() {
     const t = setTimeout(() => setNotice(''), 5000);
     return () => clearTimeout(t);
   }, [notice]);
+
+  useEffect(() => {
+    if (location.state?.notice) {
+      setNotice(location.state.notice);
+      window.history.replaceState({}, '');
+    }
+  }, []);
 
   const metrics = useMemo(() => {
     let totalRevenue = 0;

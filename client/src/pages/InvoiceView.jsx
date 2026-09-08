@@ -88,13 +88,13 @@ export default function InvoiceView() {
   return (
     <div>
       <div className="flex items-center justify-between mb-stack-md">
-        <button
-          onClick={() => navigate('/invoices')}
-          className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors"
-        >
-          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-          <span className="font-label-md text-label-md">Back to Billing</span>
-        </button>
+        <nav aria-label="Breadcrumb" className="flex text-on-surface-variant font-label-md text-label-md">
+          <ol className="flex items-center space-x-2">
+            <li><a className="hover:text-primary transition-colors cursor-pointer" onClick={() => navigate('/invoices')}>Billing</a></li>
+            <li><span className="material-symbols-outlined text-sm">chevron_right</span></li>
+            <li aria-current="page" className="text-primary font-medium">{invoice.invoice_number || 'Invoice'}</li>
+          </ol>
+        </nav>
         <div className="flex items-center gap-3">
           <WhatsAppSendAction
             kind="button"

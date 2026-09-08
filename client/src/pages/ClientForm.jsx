@@ -136,7 +136,7 @@ export default function ClientForm({ quick = false }) {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
-      navigate(fromInvoice ? '/invoices/new' : '/clients');
+      navigate(fromInvoice ? '/invoices/new' : '/clients', { state: { notice: isEdit ? 'Client updated successfully.' : 'Client created successfully.' } });
     } catch (err) {
       setError(err.message || 'Something went wrong.');
       setSaving(false);

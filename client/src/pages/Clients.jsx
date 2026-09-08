@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { usePerm } from '../hooks/usePerm.js';
 import { authHeaders } from '../utils/authHeader.js';
@@ -112,6 +112,7 @@ function csvEscape(value) {
 
 export default function Clients() {
   const navigate = useNavigate();
+  const location = useLocation();
   const can = usePerm();
   const { data, error, loading, reload } = useFetch('/clients');
 
@@ -146,6 +147,13 @@ export default function Clients() {
     const t = setTimeout(() => setNotice(''), 5000);
     return () => clearTimeout(t);
   }, [notice]);
+
+  useEffect(() => {
+    if (location.state?.notice) {
+      setNotice(location.state.notice);
+      window.history.replaceState({}, '');
+    }
+  }, []);
 
   const stats = useMemo(() => {
     const total = clients.length;

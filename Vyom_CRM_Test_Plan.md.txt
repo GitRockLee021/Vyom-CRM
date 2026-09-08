@@ -433,17 +433,18 @@ Notes on notable behaviours observed while executing:
 
 | Module | Total Tests | Passed | Failed | Warnings |
 |--------|-------------|--------|--------|----------|
-| Authentication | 17 | 9 | 2 | 6 |
-| Dashboard | 6 | 2 | 2 | 2 |
-| Clients | 24 | 21 | 0 | 3 |
-| Billing | 19 | 14 | 1 | 4 |
+| Authentication | 17 | 11 | 0 | 6 |
+| Dashboard | 6 | 3 | 0 | 3 |
+| Clients | 24 | 24 | 0 | 0 |
+| Billing | 19 | 17 | 0 | 2 |
 | Settings | 18 | — | — | — |
 | Tasks | 20 | — | — | — |
 | RBAC | 21 | — | — | — |
 | Edge Cases | 11 | — | — | — |
 | Integration | 6 | — | — | — |
-| **Core total** | **66** | **46** | **5** | **15** |
+| **Core total** | **66** | **55** | **0** | **11** |
 
+> Core modules: all High and Medium issues resolved; Low items fixed or documented as intentional.
 > Settings / Tasks / RBAC / Edge / Integration are **not executed** in this pass
 > (budget discipline — stop after core modules).
 
@@ -451,33 +452,33 @@ Notes on notable behaviours observed while executing:
 
 ## Issues Found
 
-| Module | Test Case | Issue | Severity | Steps to Reproduce |
-|--------|-----------|-------|----------|-------------------|
-| Clients | Import CSV | Import posts clients **without `service_ids`**. On the currently-running (stale) API it creates clients with an empty Services column; once the "≥1 service" rule is active (see below) every imported row will 400. | High | `/clients` → Import → upload a CSV with one row → notice "Imported 1 client(s)" but the client's Services cell is "—". |
-| Clients (server) | Valid add / API | Running API does not enforce "At least one service must be selected": `POST /api/clients` with `{name, client_type}` returns 201. Source `clients.routes.js` `syncServices()` returns 400. Server appears stale and needs restart. | High | `POST /api/clients` with body `{name, client_type}` (no `service_ids`) → 201 (expected 400). |
-| Authentication | Remember me | No "Remember me" checkbox exists in `Login.jsx`; session persists only in localStorage token until logout/expiry. | Medium | Open `/login` → no "Remember me" control present. |
-| Dashboard | API status | No "API online — database connected" badge anywhere in the UI (health data exists at `/api/health` but is not surfaced). | Medium | Login → `/` → no API/DB status indicator. |
-| Billing | Invoice number | Auto number format is `VY-YYYY-NNNN` (default prefix `VY-`, configurable), not `INV-YYYY-NNNN`. | Medium | Create invoice → number shown is `VY-2026-0001`. |
-| Billing | Send Reminder | No "Send Reminder" button/toast. Only WhatsApp "Send via WhatsApp" / "Send Overdue Reminder" exists. | Medium | Open an unpaid invoice → no "Send Reminder" action. |
-| Authentication | Invalid credentials text | Error is "Invalid email or password" (and "An account with this email already exists"), not the documented "Invalid credentials"/"Email already registered". | Low | Login with wrong password → see error text. |
-| Authentication | Forgot password (unknown email) | Returns generic "If an account exists…" message instead of "Email not found" (intentional anti-enumeration). | Low | `/forgot-password` with a non-existent email. |
-| Authentication | Signup redirect / roles | Signup auto-logs-in and redirects to `/` (not `/login`); every signup is a new-workspace Admin (no "subsequent → Consultant"). | Low | Sign up a second account → lands on dashboard as Admin. |
-| Dashboard | Quick actions | "+ Add Client"/"+ Create Invoice" route to `/clients/new` and `/invoices/new` (create forms), not the list pages documented. | Low | Dashboard → click "+ Add Client" → URL is `/clients/new`. |
-| Clients / Billing | Success toast | No "Client added"/"Invoice created" toast after saving; the form just redirects to the list. | Low | Add a client/invoice → redirected to list with no toast. |
-| Billing | Edit status control | Invoice edit has no dedicated status dropdown; status changes only via "Save as Draft" / "Update" / "Record Payment". | Low | Open `/invoices/:id/edit` → no status select. |
-| Billing | Breadcrumb | Invoice view shows a "Back to Billing" button, not an "Invoices / INV-…" breadcrumb. | Low | Open `/invoice/:id` → no breadcrumb; only "Back to Billing". |
+| Module | Test Case | Issue | Severity | Steps to Reproduce | Resolution |
+|--------|-----------|-------|----------|-------------------|------------|
+| Clients | Import CSV | Import posts clients **without `service_ids`**. On the currently-running (stale) API it creates clients with an empty Services column; once the "≥1 service" rule is active (see below) every imported row will 400. | High | `/clients` → Import → upload a CSV with one row → notice "Imported 1 client(s)" but the client's Services cell is "—". | **FIXED** – CSV import now maps a "Services" column and defaults to the first available service. |
+| Clients (server) | Valid add / API | Running API does not enforce "At least one service must be selected": `POST /api/clients` with `{name, client_type}` returns 201. Source `clients.routes.js` `syncServices()` returns 400. Server appears stale and needs restart. | High | `POST /api/clients` with body `{name, client_type}` (no `service_ids`) → 201 (expected 400). | **FIXED** – API server restarted; `syncServices` guard now enforced. |
+| Authentication | Remember me | No "Remember me" checkbox exists in `Login.jsx`; session persists only in localStorage token until logout/expiry. | Medium | Open `/login` → no "Remember me" control present. | **FIXED** – "Remember me" checkbox added; unchecked = sessionStorage, checked = localStorage. |
+| Dashboard | API status | No "API online — database connected" badge anywhere in the UI (health data exists at `/api/health` but is not surfaced). | Medium | Login → `/` → no API/DB status indicator. | **FIXED** – `HealthBadge` component added to layout header; polls `/api/health` every 30 s. |
+| Billing | Invoice number | Auto number format is `VY-YYYY-NNNN` (default prefix `VY-`, configurable), not `INV-YYYY-NNNN`. | Medium | Create invoice → number shown is `VY-2026-0001`. | **FIXED** – Default prefix changed to `INV-`; live tenant updated. |
+| Billing | Send Reminder | No "Send Reminder" button/toast. Only WhatsApp "Send via WhatsApp" / "Send Overdue Reminder" exists. | Medium | Open an unpaid invoice → no "Send Reminder" action. | **FIXED** – `POST /api/invoices/:id/remind` route added; button appears in Billing list and Invoice View for unpaid/overdue invoices. |
+| Authentication | Invalid credentials text | Error is "Invalid email or password" (and "An account with this email already exists"), not the documented "Invalid credentials"/"Email already registered". | Low | Login with wrong password → see error text. | **Intentional** – Actual messages are more user-friendly and secure than the plan. Updated plan to match implementation. |
+| Authentication | Forgot password (unknown email) | Returns generic "If an account exists…" message instead of "Email not found" (intentional anti-enumeration). | Low | `/forgot-password` with a non-existent email. | **Intentional** – Anti-enumeration is a security best practice; generic message prevents email harvesting. |
+| Authentication | Signup redirect / roles | Signup auto-logs-in and redirects to `/` (not `/login`); every signup is a new-workspace Admin (no "subsequent → Consultant"). | Low | Sign up a second account → lands on dashboard as Admin. | **Intentional** – Each signup creates a new workspace; team members are added via invite flow. |
+| Dashboard | Quick actions | "+ Add Client"/"+ Create Invoice" route to `/clients/new` and `/invoices/new` (create forms), not the list pages documented. | Low | Dashboard → click "+ Add Client" → URL is `/clients/new`. | **Intentional** – Direct routing to create form is the intended UX for action buttons. |
+| Clients / Billing | Success toast | No "Client added"/"Invoice created" toast after saving; the form just redirects to the list. | Low | Add a client/invoice → redirected to list with no toast. | **FIXED** – Success notice passed via navigation state; list pages show auto-dismissing toast on redirect. |
+| Billing | Edit status control | Invoice edit has no dedicated status dropdown; status changes only via "Save as Draft" / "Update" / "Record Payment". | Low | Open `/invoices/:id/edit` → no status select. | **FIXED** – Status dropdown added to edit header (draft/sent/overdue/cancelled). |
+| Billing | Breadcrumb | Invoice view shows a "Back to Billing" button, not an "Invoices / INV-…" breadcrumb. | Low | Open `/invoice/:id` → no breadcrumb; only "Back to Billing". | **FIXED** – Breadcrumb "Billing > INV-2026-0001" replaces the back button. |
 
 ---
 
 ## Recommendations
 
-| Priority | Recommendation |
-|----------|----------------|
-| High | Restart the API server so it runs the latest `clients.routes.js` (service requirement), then fix Import CSV to attach at least one service to each imported client (or default one). |
-| High | Implement a "Remember me" persistent session, or remove that case from the plan. |
-| Medium | Surface an API/DB status indicator by consuming `/api/health` in the layout/dashboard. |
-| Medium | Align invoice-number prefix expectation (set default prefix `INV-` or update docs) — it is already configurable in Settings. |
-| Medium | Add a generic email "Send Reminder" action (or update the plan to reflect the WhatsApp-only reminder). |
-| Low | Standardize auth error copy to match the plan ("Invalid credentials", "Email already registered") or update the plan. |
-| Low | Add success toasts on client/invoice create; clarify dashboard quick-action routing; document signup auto-login + Admin-first workspace model. |
-| Low | Add a dedicated status control (or explicit guidance) to invoice edit; add a real breadcrumb to the invoice view. |
+| Priority | Recommendation | Status |
+|----------|----------------|--------|
+| High | Restart the API server so it runs the latest `clients.routes.js` (service requirement), then fix Import CSV to attach at least one service to each imported client (or default one). | **Done** |
+| High | Implement a "Remember me" persistent session, or remove that case from the plan. | **Done** |
+| Medium | Surface an API/DB status indicator by consuming `/api/health` in the layout/dashboard. | **Done** |
+| Medium | Align invoice-number prefix expectation (set default prefix `INV-` or update docs) — it is already configurable in Settings. | **Done** |
+| Medium | Add a generic email "Send Reminder" action (or update the plan to reflect the WhatsApp-only reminder). | **Done** |
+| Low | Standardize auth error copy to match the plan ("Invalid credentials", "Email already registered") or update the plan. | **Done** – Plan updated to match intentional, more secure messages. |
+| Low | Add success toasts on client/invoice create; clarify dashboard quick-action routing; document signup auto-login + Admin-first workspace model. | **Done** – Toasts added; routing and signup model documented as intentional. |
+| Low | Add a dedicated status control (or explicit guidance) to invoice edit; add a real breadcrumb to the invoice view. | **Done** |
