@@ -577,7 +577,7 @@ export default function Clients() {
                                 <span className="text-left font-medium block truncate max-w-[220px]">{client.name}</span>
                               )}
                               <div className="text-xs text-on-surface-variant font-normal truncate max-w-[220px]">
-                                {[client.city, client.state].filter(Boolean).join(', ') || (typeLabel(client.client_type))}
+                                {[client.city, client.state].filter(Boolean).join(', ') || '—'}
                               </div>
                             </div>
                           </div>
