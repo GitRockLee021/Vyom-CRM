@@ -177,6 +177,69 @@ router.post('/', requirePerm('clients.create'), async (req, res, next) => {
   }
 });
 
+// Update a client and (optionally) replace its service set in a SINGLE SQL
+// statement. Runs inside the caller's transaction so a validation failure
+// rolls the whole update back atomically. Returns { client, services }.
+// Replacing the old ~7-query sequence cuts a save down to one DB round trip,
+// which dominates perceived latency on a remote (Supabase) database.
+async function updateClientAndServices(pg, id, tenantId, data, serviceIds) {
+  const keys = Object.keys(data);
+  const hasServices = serviceIds !== undefined;
+  if (!keys.length && !hasServices) throw httpError(400, 'No valid fields provided');
+  if (hasServices && (!Array.isArray(serviceIds) || serviceIds.filter((s) => String(s).trim()).length === 0)) {
+    throw httpError(400, 'At least one service must be selected');
+  }
+
+  const sets = keys.map((k, i) => `${k} = $${i + 3}`);
+  const svcParamIndex = keys.length + 3;
+  const svc = hasServices
+    ? [...new Set(serviceIds.map((s) => String(s).trim()).filter(Boolean))]
+    : null;
+
+  const { rows } = await pg.query(
+    `WITH updated AS (
+       UPDATE clients SET ${sets.length ? sets.join(', ') : 'name = name'}
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING *
+     ),
+     requested AS (
+       SELECT DISTINCT unnest($${svcParamIndex}::uuid[])::uuid AS id
+     ),
+     valid AS (
+       SELECT r.id, s.name FROM requested r
+       JOIN services s ON s.id = r.id AND s.tenant_id = $2
+     ),
+     deleted AS (
+       DELETE FROM client_services WHERE client_id = $1
+         AND $${svcParamIndex} IS NOT NULL
+         AND service_id NOT IN (SELECT id FROM valid)
+     ),
+     linked AS (
+       INSERT INTO client_services (client_id, service_id)
+       SELECT $1, v.id FROM valid v
+       WHERE $${svcParamIndex} IS NOT NULL
+       ON CONFLICT DO NOTHING
+     )
+     SELECT
+       (SELECT to_jsonb(u) FROM updated u) AS client,
+       CASE WHEN $${svcParamIndex} IS NOT NULL
+         THEN (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', v.id, 'name', v.name) ORDER BY v.name), '[]'::jsonb) FROM valid v)
+         ELSE (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name) ORDER BY s.name), '[]'::jsonb)
+               FROM client_services cs JOIN services s ON s.id = cs.service_id WHERE cs.client_id = $1)
+       END AS services,
+       (SELECT count(*) FROM requested) AS requested_count,
+       (SELECT count(*) FROM valid) AS valid_count`,
+    [id, tenantId, ...Object.values(data), svc]
+  );
+
+  const row = rows[0];
+  if (!row?.client) throw httpError(404, 'Client not found');
+  if (hasServices && Number(row.requested_count || 0) !== Number(row.valid_count || 0)) {
+    throw httpError(400, 'One or more selected services do not exist');
+  }
+  return { client: row.client, services: Array.isArray(row.services) ? row.services : [] };
+}
+
 // PUT /api/clients/:id
 router.put('/:id', requirePerm('clients.edit'), async (req, res, next) => {
   const pg = await pool.connect();
@@ -186,60 +249,26 @@ router.put('/:id', requirePerm('clients.edit'), async (req, res, next) => {
     validate(data, { partial: true });
     if (data.assigned_to) await assertUserInTenant(data.assigned_to, req.user.tenant_id);
 
-    const keys = Object.keys(data);
-    if (!keys.length && req.body?.service_ids === undefined) throw httpError(400, 'No valid fields provided');
-
-    const onlyServices = keys.length === 0 && req.body?.service_ids !== undefined;
-    if (!onlyServices) {
-      const sets = keys.map((key, i) => `${key} = $${i + 1}`);
-      const values = [...Object.values(data), req.params.id, req.user.tenant_id];
-
-      const updated = await pg.query(
-        `UPDATE clients SET ${sets.join(', ')} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING *`,
-        values
-      );
-      if (!updated.rows[0]) throw httpError(404, 'Client not found');
-    }
-
-    if (req.body?.service_ids !== undefined) {
-      await syncServices(pg, req.params.id, req.body.service_ids, req.user.tenant_id);
-    }
-
-    const { rows } = await pg.query(
-      `SELECT c.*, (${SERVICE_SELECT}) AS services FROM clients c WHERE c.id = $1`,
-      [req.params.id]
+    const { client, services } = await updateClientAndServices(
+      pg,
+      req.params.id,
+      req.user.tenant_id,
+      data,
+      req.body?.service_ids
     );
     await pg.query('COMMIT');
 
-    // After the client/services update is committed, generate tasks for newly
-    // opted-in services and flag tasks for any service that was removed.
-    // Skip entirely when the service set didn't change — re-syncing would only
-    // repeat idempotent checks and cost many slow round-trips on every edit.
+    // Reconcile compliance tasks off the response path (idempotent; any missed
+    // work is created on this client's next save).
     if (req.body?.service_ids !== undefined) {
-      const { rows: currentServiceRows } = await pg.query(
-        'SELECT service_id FROM client_services WHERE client_id = $1',
-        [req.params.id]
-      );
-      const current = new Set(currentServiceRows.map((r) => String(r.service_id)));
-      const requested = new Set(
-        (Array.isArray(req.body.service_ids) ? req.body.service_ids : [])
-          .map((s) => String(s).trim())
-          .filter(Boolean)
-      );
-      const servicesChanged =
-        current.size !== requested.size || [...requested].some((id) => !current.has(id));
-      if (servicesChanged) {
-        // Run task sync off the response path — the client gets its reply
-        // immediately and compliance tasks reconcile in the background.
-        setImmediate(() => {
-          syncTasksForClient(req.params.id, req.user.tenant_id, req.user.id).catch((err) =>
-            console.error('[clients] task sync warning:', err.message)
-          );
-        });
-      }
+      setImmediate(() => {
+        syncTasksForClient(req.params.id, req.user.tenant_id, req.user.id).catch((err) =>
+          console.error('[clients] task sync warning:', err.message)
+        );
+      });
     }
 
-    res.json(rows[0]);
+    res.json({ ...client, services });
   } catch (err) {
     await pg.query('ROLLBACK').catch(() => {});
     next(err);
