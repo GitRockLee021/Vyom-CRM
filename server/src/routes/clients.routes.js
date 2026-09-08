@@ -53,10 +53,13 @@ async function syncServices(client, clientId, serviceIds, tenantId) {
     if (invalid.length) throw httpError(400, 'One or more selected services do not exist');
   }
   await client.query('DELETE FROM client_services WHERE client_id = $1', [clientId]);
-  for (const serviceId of ids) {
+  if (ids.length) {
     await client.query(
-      'INSERT INTO client_services (client_id, service_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-      [clientId, serviceId]
+      `INSERT INTO client_services (client_id, service_id)
+       SELECT $1::uuid, u.service_id
+       FROM unnest($2::uuid[]) AS u(service_id)
+       ON CONFLICT DO NOTHING`,
+      [clientId, ids]
     );
   }
 }
@@ -156,11 +159,14 @@ router.post('/', requirePerm('clients.create'), async (req, res, next) => {
     );
     await pg.query('COMMIT');
 
-    try {
-      await syncTasksForClient(client.id, req.user.tenant_id, req.user.id);
-    } catch (taskErr) {
-      console.error('[clients] task sync warning:', taskErr.message);
-    }
+    // Generate compliance tasks in the background so the response isn't blocked
+    // on the (idempotent) task work. Any task that is missed here is created the
+    // next time this client is saved.
+    setImmediate(() => {
+      syncTasksForClient(client.id, req.user.tenant_id, req.user.id).catch((err) =>
+        console.error('[clients] task sync warning:', err.message)
+      );
+    });
 
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -223,11 +229,13 @@ router.put('/:id', requirePerm('clients.edit'), async (req, res, next) => {
       const servicesChanged =
         current.size !== requested.size || [...requested].some((id) => !current.has(id));
       if (servicesChanged) {
-        try {
-          await syncTasksForClient(req.params.id, req.user.tenant_id, req.user.id);
-        } catch (taskErr) {
-          console.error('[clients] task sync warning:', taskErr.message);
-        }
+        // Run task sync off the response path — the client gets its reply
+        // immediately and compliance tasks reconcile in the background.
+        setImmediate(() => {
+          syncTasksForClient(req.params.id, req.user.tenant_id, req.user.id).catch((err) =>
+            console.error('[clients] task sync warning:', err.message)
+          );
+        });
       }
     }
 
