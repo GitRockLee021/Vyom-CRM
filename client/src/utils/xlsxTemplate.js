@@ -1,9 +1,10 @@
 // Minimal dependency-free .xlsx generator (ZIP with STORED entries + SpreadsheetML).
 // Produces a clients import template with Excel list-dropdowns on the
-// Assessee Type, Status and Services columns. The Services options come from
-// the tenant's configured services (fetched at download time); they are stored
-// on a hidden lookup sheet so the list is not limited by Excel's 255-char
-// inline formula cap.
+// Assessee Type, Status and per-service columns (Service 1..N, one dropdown per
+// column so a client with several services picks one per column). The Services
+// options come from the tenant's configured services (fetched at download time);
+// they are stored on a hidden lookup sheet so the list is not limited by
+// Excel's 255-char inline formula cap.
 
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -95,10 +96,12 @@ function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const HEADERS = ['Name', 'Assessee Type', 'Email', 'Phone', 'City', 'Status', 'Services'];
+const SERVICE_COLUMNS = 5;
+const SERVICE_COL_NAMES = Array.from({ length: SERVICE_COLUMNS }, (_, i) => `Service ${i + 1}`);
+const HEADERS = ['Name', 'Assessee Type', 'Email', 'Phone', 'City', 'Status', ...SERVICE_COL_NAMES];
 const EXAMPLES = [
   ['Aarav Sharma', 'Individual', 'aarav.s@example.com', '+91 98765 43210', 'Mumbai', 'Active', 'GST Filing'],
-  ['GreenTech Solutions', 'Private Limited', 'contact@greentech.co.in', '+91 11 2345 6789', 'New Delhi', 'Inactive', 'ITR Filing, Bookkeeping'],
+  ['GreenTech Solutions', 'Private Limited', 'contact@greentech.co.in', '+91 11 2345 6789', 'New Delhi', 'Inactive', 'ITR Filing', 'Bookkeeping'],
 ];
 const TYPE_LIST = 'Individual,Proprietor,Partnership,Private Limited,LLP,Others';
 const STATUS_LIST = 'Active,Inactive';
@@ -130,9 +133,13 @@ function buildSheetXml(serviceNames) {
   ];
   if (services.length) {
     const range = Math.min(services.length, SERVICE_MAX);
-    validations.push(
-      `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="G2:G${lastRow}"><formula1>'${SERVICE_LIST_SHEET}'!$A$2:$A$${range + 1}</formula1></dataValidation>`,
-    );
+    const firstServiceCol = HEADERS.length - SERVICE_COLUMNS + 1; // 1-based letter of 'Service 1'
+    for (let i = 0; i < SERVICE_COLUMNS; i += 1) {
+      const letter = colLetter(firstServiceCol - 1 + i);
+      validations.push(
+        `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="${letter}2:${letter}${lastRow}"><formula1>'${SERVICE_LIST_SHEET}'!$A$2:$A$${range + 1}</formula1></dataValidation>`,
+      );
+    }
   }
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -143,7 +150,7 @@ function buildSheetXml(serviceNames) {
 <col min="4" max="4" width="20" customWidth="1"/>
 <col min="5" max="5" width="16" customWidth="1"/>
 <col min="6" max="6" width="12" customWidth="1"/>
-<col min="7" max="7" width="22" customWidth="1"/>
+<col min="7" max="${7 + SERVICE_COLUMNS - 1}" width="22" customWidth="1"/>
 </cols>
 <sheetData>${rows.join('')}</sheetData>
 <dataValidations count="${validations.length}">

@@ -313,6 +313,9 @@ export default function Clients() {
     const iStatus = col('status');
     const iCity = col('city');
     const iServices = col('services', 'service', 'service names', 'service(s)');
+    const serviceColumns = headers
+      .map((h, idx) => (/^service\s*\d+$/i.test(h) && h !== 'service' ? idx : -1))
+      .filter((idx) => idx >= 0);
 
     let services = [];
     try {
@@ -326,14 +329,16 @@ export default function Clients() {
     services.forEach((s) => byName.set(String(s.name || '').trim().toLowerCase(), s.id));
 
     function serviceIdsFor(r) {
-      const raw = iServices >= 0 ? String(r[iServices] || '') : '';
-      if (raw.trim()) {
-        const ids = raw
-          .split(/[,;|]+/)
-          .map((n) => byName.get(n.trim().toLowerCase()))
-          .filter(Boolean);
-        if (ids.length) return [...new Set(ids)];
-      }
+      const cells = serviceColumns.length
+        ? serviceColumns.map((idx) => String(r[idx] || ''))
+        : iServices >= 0
+          ? [String(r[iServices] || '')]
+          : [];
+      const raws = cells
+        .filter((c) => c.trim())
+        .flatMap((c) => c.split(/[,;|]+/).map((n) => n.trim()).filter(Boolean));
+      const ids = [...new Set(raws.map((n) => byName.get(n.toLowerCase())).filter(Boolean))];
+      if (ids.length) return ids;
       return services.length ? [services[0].id] : [];
     }
 
@@ -712,12 +717,12 @@ export default function Clients() {
               Download the Excel template below — it has dropdown lists for Assessee Type, Status and Services. Fill it in and upload the file.
             </p>
             <p className="font-data-mono text-data-mono text-on-surface bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 mb-stack-md">
-              Name, Assessee Type, Email, Phone, City, Status, Services (optional)
+              Name, Assessee Type, Email, Phone, City, Status, Service 1, Service 2, Service 3, Service 4, Service 5
             </p>
             <ul className="font-body-md text-body-md text-on-surface-variant mb-stack-lg list-disc pl-5 space-y-1">
               <li>Assessee Type: Individual, Proprietor, Partnership, LLP, Private Limited, or Others</li>
               <li>Status (optional): Active or Inactive — left blank, clients are created as Active</li>
-              <li>Services (optional): pick from the drop-down — these match the services set up in Settings. Leave blank and each imported client is assigned to your first available service.</li>
+              <li>Services (optional): pick one per "Service" column from the drop-down — they match the services set up in Settings. A client with several services fills in as many columns as needed. Leave all blank and each imported client is assigned to your first available service.</li>
               <li>Only "Name" is required in each row.</li>
             </ul>
             <div className="flex flex-col sm:flex-row justify-end gap-3">
