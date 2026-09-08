@@ -41,16 +41,18 @@ export async function loginApi(email, password = PW) {
   return api('/api/auth/login', { method: 'POST', body: { email, password } });
 }
 
-// Authenticate a fresh page context by seeding localStorage before load.
-export async function seedAuth(page, token, user) {
-  await page.addInitScript(([t, u]) => {
-    window.localStorage.setItem('vyom_token', t);
-    window.localStorage.setItem('vyom_user', JSON.stringify(u));
-  }, [token, user]);
+// Authenticate a fresh page context by seeding the token before load.
+// The app stores the token in sessionStorage when "Remember me" is unchecked —
+// that is the default — so e2e must cover BOTH storages (see session-auth.spec.js).
+export async function seedAuth(page, token, user, { storage = 'localStorage' } = {}) {
+  await page.addInitScript(([t, u, s]) => {
+    window[s].setItem('vyom_token', t);
+    window[s].setItem('vyom_user', JSON.stringify(u));
+  }, [token, user, storage]);
 }
 
-export async function gotoAuthed(page, token, user, path = '/') {
-  await seedAuth(page, token, user);
+export async function gotoAuthed(page, token, user, path = '/', opts = {}) {
+  await seedAuth(page, token, user, opts);
   await page.goto(path);
 }
 

@@ -48,9 +48,18 @@ app.use('/api/whatsapp', requireAuth, whatsappRouter);
 // Serve the built React client (static files + SPA fallback). This lets a single
 // service host both the API and the frontend under one origin.
 if (fs.existsSync(CLIENT_DIST)) {
-  app.use(express.static(CLIENT_DIST));
+  // Vite fingerprints every build asset (e.g. index-BVOc2SPW.js), so hashed
+  // files can be cached "forever" — a new build always emits new filenames.
+  app.use(
+    '/assets',
+    express.static(path.join(CLIENT_DIST, 'assets'), { immutable: true, maxAge: '1y' }),
+  );
+  app.use(express.static(CLIENT_DIST, { index: false }));
   app.use((req, res, next) => {
     if (req.path.startsWith('/api')) return next();
+    // index.html must be revalidated on every load so a freshly deployed bundle
+    // is picked up immediately instead of serving a stale cached one.
+    res.set('Cache-Control', 'no-cache');
     res.sendFile(path.join(CLIENT_DIST, 'index.html'));
   });
 }
