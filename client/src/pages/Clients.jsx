@@ -139,6 +139,9 @@ export default function Clients() {
   const [deleting, setDeleting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [parsingFile, setParsingFile] = useState(false);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importDone, setImportDone] = useState(false);
   const [notice, setNotice] = useState('');
   const fileRef = useRef(null);
 
@@ -281,30 +284,32 @@ export default function Clients() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    let table;
+    setParsingFile(true);
     try {
-      const name = file.name.toLowerCase();
-      if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-        const data = await file.arrayBuffer();
-        const wb = XLSX.read(data, { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        table = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-      } else {
-        table = parseCsv(await file.text());
+      let table;
+      try {
+        const name = file.name.toLowerCase();
+        if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+          const data = await file.arrayBuffer();
+          const wb = XLSX.read(data, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          table = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        } else {
+          table = parseCsv(await file.text());
+        }
+      } catch {
+        setNotice('Could not read that file.');
+        return;
       }
-    } catch {
-      setNotice('Could not read that file.');
-      return;
-    }
     if (table.length < 2) {
-      setNotice('No data rows found in the CSV.');
+      setNotice('No data rows found in the file.');
       return;
     }
     const headers = table[0].map((h) => h.trim().toLowerCase());
     const col = (...names) => names.map((n) => headers.indexOf(n)).find((i) => i >= 0) ?? -1;
     const iName = col('name', 'client name');
     if (iName < 0) {
-      setNotice('CSV must include a "Name" column.');
+      setNotice('File must include a "Name" column.');
       return;
     }
     const iType = col('assessee type', 'type', 'client_type');
@@ -327,46 +332,93 @@ export default function Clients() {
     } catch { /* services stay empty */ }
     const byName = new Map();
     services.forEach((s) => byName.set(String(s.name || '').trim().toLowerCase(), s.id));
+    const byId = new Map();
+    services.forEach((s) => byId.set(s.id, s.name));
 
-    function serviceIdsFor(r) {
+    function resolveServicesFor(r) {
       const cells = serviceColumns.length
         ? serviceColumns.map((idx) => String(r[idx] || ''))
         : iServices >= 0
           ? [String(r[iServices] || '')]
           : [];
-      const raws = cells
+      const tokens = cells
         .filter((c) => c.trim())
         .flatMap((c) => c.split(/[,;|]+/).map((n) => n.trim()).filter(Boolean));
-      const ids = [...new Set(raws.map((n) => byName.get(n.toLowerCase())).filter(Boolean))];
-      if (ids.length) return ids;
-      return services.length ? [services[0].id] : [];
+      const ids = [];
+      const unknown = [];
+      const seen = new Set();
+      for (const tok of tokens) {
+        const id = byName.get(tok.toLowerCase());
+        if (id) { if (!seen.has(id)) { seen.add(id); ids.push(id); } }
+        else if (!unknown.includes(tok)) unknown.push(tok);
+      }
+      const usedFallback = !tokens.length && services.length > 0;
+      if (!tokens.length && services.length) ids.push(services[0].id); // first available service
+      return { ids, unknown, usedFallback };
     }
 
+    const preview = [];
+    for (let i = 1; i < table.length; i += 1) {
+      const r = table[i];
+      const name = (r[iName] || '').trim();
+      if (!name) continue;
+      const { ids, unknown, usedFallback } = resolveServicesFor(r);
+      const errors = [];
+      if (unknown.length) errors.push(`Unknown service${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}`);
+      if (!ids.length && !services.length) errors.push('No services configured — add services in Settings first.');
+      preview.push({
+        excelRow: i + 1,
+        name,
+        type: normalizeType(iType >= 0 ? r[iType] : ''),
+        email: (iEmail >= 0 ? r[iEmail] : '').trim() || null,
+        phone: (iPhone >= 0 ? r[iPhone] : '').trim() || null,
+        city: (iCity >= 0 ? r[iCity] : '').trim() || null,
+        status: normalizeStatus(iStatus >= 0 ? r[iStatus] : ''),
+        serviceIds: ids,
+        serviceNames: ids.map((id) => byId.get(id)).filter(Boolean),
+        usedFallback,
+        skippedRows: unknown.length > 0 || (!ids.length && !services.length),
+        errors,
+        outcome: null,
+      });
+    }
+
+    setImportPreview(preview);
+    setImportDone(false);
+    } finally {
+      setParsingFile(false);
+    }
+  }
+
+  async function runImport() {
+    if (!importPreview || importing) return;
     setImporting(true);
     let created = 0;
     let failed = 0;
-    for (const r of table.slice(1)) {
-      const name = (r[iName] || '').trim();
-      if (!name) continue;
-      const service_ids = serviceIdsFor(r);
-      if (!service_ids.length) { failed += 1; continue; }
-      try {
-        const sVal = normalizeStatus(iStatus >= 0 ? r[iStatus] : '');
-        await api('POST', '/clients', {
-          name,
-          client_type: normalizeType(iType >= 0 ? r[iType] : ''),
-          email: (iEmail >= 0 ? r[iEmail] : '').trim() || null,
-          phone: (iPhone >= 0 ? r[iPhone] : '').trim() || null,
-          city: (iCity >= 0 ? r[iCity] : '').trim() || null,
-          service_ids,
-          ...(sVal === 'active' || sVal === 'inactive' ? { status: sVal } : {}),
-        });
-        created += 1;
-      } catch {
-        failed += 1;
-      }
-    }
+    const results = await Promise.all(
+      importPreview.map(async (p) => {
+        if (p.skippedRows) return p;
+        try {
+          await api('POST', '/clients', {
+            name: p.name,
+            client_type: p.type,
+            email: p.email,
+            phone: p.phone,
+            city: p.city,
+            service_ids: p.serviceIds,
+            ...(p.status === 'active' || p.status === 'inactive' ? { status: p.status } : {}),
+          });
+          created += 1;
+          return { ...p, outcome: { ok: true, message: 'Imported' } };
+        } catch (err) {
+          failed += 1;
+          return { ...p, outcome: { ok: false, message: err.message } };
+        }
+      }),
+    );
+    setImportPreview(results);
     setImporting(false);
+    setImportDone(true);
     reload();
     setNotice(`Imported ${created} client(s)${failed ? `, ${failed} failed` : ''}.`);
   }
@@ -742,6 +794,105 @@ export default function Clients() {
                 <span className="material-symbols-outlined text-[18px]">upload</span>
                 Choose File
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reading file overlay */}
+      {parsingFile && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card-lg flex items-center gap-4 px-6 py-5">
+            <span className="inline-block h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <div>
+              <p className="font-label-lg text-label-lg text-on-surface">Reading file…</p>
+              <p className="font-body-sm text-body-sm text-on-surface-variant">Preparing your import preview.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Preview */}
+      {importPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!importing) { setImportPreview(null); setImportDone(false); } }}>
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card-lg w-full max-w-6xl p-container-padding max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-headline-md text-headline-md text-on-surface mb-1">Review before importing</h3>
+            <p className="font-body-md text-body-md text-on-surface-variant mb-stack-md">
+              {importPreview.length} row(s) found. Rows with issues are skipped — check the error column.
+            </p>
+            <div className="overflow-auto border border-outline-variant rounded-lg mb-stack-md">
+              <table className="w-full text-left font-body-sm text-body-sm">
+                <thead className="bg-surface-container-low text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
+                  <tr>
+                    <th className="px-3 py-2">Row</th>
+                    <th className="px-3 py-2">Name</th>
+                    <th className="px-3 py-2">Type</th>
+                    <th className="px-3 py-2">Email</th>
+                    <th className="px-3 py-2">Phone</th>
+                    <th className="px-3 py-2">City</th>
+                    <th className="px-3 py-2">Services</th>
+                    <th className="px-3 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importPreview.map((p) => (
+                    <tr key={`${p.excelRow}-${p.name}`} className="border-t border-outline-variant align-top">
+                      <td className="px-3 py-2 text-on-surface-variant">{p.excelRow}</td>
+                      <td className="px-3 py-2 font-label-md text-label-md text-on-surface">{p.name}</td>
+                      <td className="px-3 py-2">{typeLabel(p.type)}</td>
+                      <td className="px-3 py-2">{p.email || '—'}</td>
+                      <td className="px-3 py-2">{p.phone || '—'}</td>
+                      <td className="px-3 py-2">{p.city || '—'}</td>
+                      <td className="px-3 py-2">
+                        {p.errors.length ? (
+                          <span className="text-error">{p.errors.join('. ')}</span>
+                        ) : p.serviceNames.length ? (
+                          p.serviceNames.map((s) => <span key={s} className="inline-block bg-surface-variant text-on-surface-variant rounded-full px-2 py-0.5 mr-1 mb-1 text-label-sm">{s}</span>)
+                        ) : (
+                          <span className="text-on-surface-variant">—</span>
+                        )}
+                        {p.usedFallback && !p.errors.length && (
+                          <span className="block text-on-surface-variant text-label-sm">(auto: first available service)</span>
+                        )}
+                        {p.outcome && (
+                          <span className={`block font-label-sm text-label-sm ${p.outcome.ok ? 'text-[#166534]' : 'text-error'}`}>
+                            {p.outcome.ok ? '✓ Imported' : `✗ ${p.outcome.message}`}
+                          </span>
+                        )}
+                        {p.skippedRows && !p.outcome && (
+                          <span className="block font-label-sm text-label-sm text-error">Skipped</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 capitalize">{p.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {importDone && (
+              <p className="font-body-sm text-body-sm text-on-surface-variant mb-stack-md">
+                {importPreview.filter((p) => p.outcome && p.outcome.ok).length} imported, {importPreview.filter((p) => p.outcome && !p.outcome.ok).length} failed, {importPreview.filter((p) => p.skippedRows || !p.outcome).length} skipped.
+              </p>
+            )}
+            <div className="flex flex-col sm:flex-row justify-end gap-3">
+              <button
+                type="button"
+                disabled={importing}
+                className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low disabled:opacity-50"
+                onClick={() => { setImportPreview(null); setImportDone(false); }}
+              >
+                Close
+              </button>
+              {!importDone && (
+                <button
+                  type="button"
+                  disabled={importing || importPreview.every((p) => p.skippedRows)}
+                  className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                  onClick={runImport}
+                >
+                  {importing ? 'Importing…' : `Import ${importPreview.filter((p) => !p.skippedRows).length} client(s)`}
+                </button>
+              )}
             </div>
           </div>
         </div>
