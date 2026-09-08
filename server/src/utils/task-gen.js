@@ -189,44 +189,67 @@ export async function ensureEngagement(clientId, service, tenantId) {
 
 // Generate compliance tasks for a client's opted-in service. Idempotent: won't
 // create a duplicate for the same engagement+period (or title).
+// Uses bulk (multi-row) inserts so a full plan is a handful of queries instead
+// of one round-trip per task/checklist row.
 export async function generateTasksForService(clientId, service, tenantId, actorUserId = null) {
   const engagement = await ensureEngagement(clientId, service, tenantId);
   const plans = planForService(service);
-  const created = [];
 
-  for (const plan of plans) {
-    const existing = await query(
-      `SELECT id FROM tasks
-       WHERE engagement_id = $1 AND period = $2 AND title = $3`,
-      [engagement.id, plan.periodLabel, plan.title]
+  // Fetch all existing tasks for this engagement in ONE round trip so missing
+  // plans can be computed without a per-plan SELECT.
+  const { rows: existingRows } = await query(
+    'SELECT period, title FROM tasks WHERE engagement_id = $1',
+    [engagement.id]
+  );
+  const existing = new Set(existingRows.map((r) => `${r.period}::${r.title}`));
+  const missing = plans.filter((p) => !existing.has(`${p.periodLabel}::${p.title}`));
+  if (missing.length === 0) return [];
+
+  const { rows: createdRows } = await query(
+    `INSERT INTO tasks (tenant_id, client_id, engagement_id, title, period, due_date)
+     SELECT $1::uuid, $2::uuid, $3::uuid, u.title, u.period, u.due_date
+     FROM unnest($4::text[], $5::text[], $6::date[]) AS u(title, period, due_date)
+     RETURNING id, title, period`,
+    [
+      tenantId,
+      clientId,
+      engagement.id,
+      missing.map((p) => p.title),
+      missing.map((p) => p.periodLabel),
+      missing.map((p) => nextDueDate(p.due)),
+    ]
+  );
+  const created = createdRows.map((r) => r.id);
+  const taskIdByKey = new Map(createdRows.map((r) => [`${r.period}::${r.title}`, r.id]));
+
+  // Insert every checklist item for all new tasks in one statement.
+  const checkTaskIds = [];
+  const checkTitles = [];
+  const checkPositions = [];
+  for (const plan of missing) {
+    const taskId = taskIdByKey.get(`${plan.periodLabel}::${plan.title}`);
+    plan.checklist.forEach((title, i) => {
+      checkTaskIds.push(taskId);
+      checkTitles.push(title);
+      checkPositions.push(i);
+    });
+  }
+  if (checkTaskIds.length) {
+    await query(
+      `INSERT INTO task_checklist_items (task_id, title, position)
+       SELECT u.task_id, u.title, u.position
+       FROM unnest($1::uuid[], $2::text[], $3::int[]) AS u(task_id, title, position)`,
+      [checkTaskIds, checkTitles, checkPositions]
     );
-    if (existing.rows[0]) continue;
+  }
 
-    const { rows } = await query(
-      `INSERT INTO tasks (tenant_id, client_id, engagement_id, title, period, status, due_date)
-       VALUES ($1, $2, $3, $4, $5, 'todo', $6)
-       RETURNING *`,
-      [tenantId, clientId, engagement.id, plan.title, plan.periodLabel, nextDueDate(plan.due)]
+  if (actorUserId && created.length) {
+    await query(
+      `INSERT INTO task_activity (task_id, user_id, action, details)
+       SELECT u.task_id, $1, 'created', $2::jsonb
+       FROM unnest($3::uuid[]) AS u(task_id)`,
+      [actorUserId, JSON.stringify({ source: 'service', service: service.name }), created]
     );
-    const task = rows[0];
-
-    // Seed default checklist items.
-    for (let i = 0; i < plan.checklist.length; i++) {
-      await query(
-        `INSERT INTO task_checklist_items (task_id, title, position) VALUES ($1, $2, $3)`,
-        [task.id, plan.checklist[i], i]
-      );
-    }
-
-    if (actorUserId) {
-      await query(
-        `INSERT INTO task_activity (task_id, user_id, action, details)
-         VALUES ($1, $2, 'created', $3::jsonb)`,
-        [task.id, actorUserId, JSON.stringify({ source: 'service', service: service.name })]
-      );
-    }
-
-    created.push(task.id);
   }
 
   return created;

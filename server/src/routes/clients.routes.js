@@ -207,11 +207,27 @@ router.put('/:id', requirePerm('clients.edit'), async (req, res, next) => {
 
     // After the client/services update is committed, generate tasks for newly
     // opted-in services and flag tasks for any service that was removed.
+    // Skip entirely when the service set didn't change — re-syncing would only
+    // repeat idempotent checks and cost many slow round-trips on every edit.
     if (req.body?.service_ids !== undefined) {
-      try {
-        await syncTasksForClient(req.params.id, req.user.tenant_id, req.user.id);
-      } catch (taskErr) {
-        console.error('[clients] task sync warning:', taskErr.message);
+      const { rows: currentServiceRows } = await pg.query(
+        'SELECT service_id FROM client_services WHERE client_id = $1',
+        [req.params.id]
+      );
+      const current = new Set(currentServiceRows.map((r) => String(r.service_id)));
+      const requested = new Set(
+        (Array.isArray(req.body.service_ids) ? req.body.service_ids : [])
+          .map((s) => String(s).trim())
+          .filter(Boolean)
+      );
+      const servicesChanged =
+        current.size !== requested.size || [...requested].some((id) => !current.has(id));
+      if (servicesChanged) {
+        try {
+          await syncTasksForClient(req.params.id, req.user.tenant_id, req.user.id);
+        } catch (taskErr) {
+          console.error('[clients] task sync warning:', taskErr.message);
+        }
       }
     }
 
