@@ -46,6 +46,24 @@ const STATUS_BADGE = {
   prospect: 'bg-[#FEF3C7] text-[#92400E]',
 };
 
+const AVATAR_COLORS = ['bg-[#0b6bcb]', 'bg-[#7c3aed]', 'bg-[#0d9488]', 'bg-[#d97706]', 'bg-[#4b5563]'];
+
+function initials(name) {
+  return (name || '?').split(/\s+/).map((n) => n[0]).slice(0, 2).join('').toUpperCase() || '?';
+}
+
+function avatarColor(name) {
+  let h = 0;
+  for (let i = 0; i < (name || '').length; i += 1) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+function waLink(client) {
+  const digits = (client.phone || '').replace(/\D+/g, '');
+  if (!digits) return null;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(`Hi ${client.name}, message from Vyom CRM.`)}`;
+}
+
 const EMPTY_FORM = { name: '', client_type: 'individual', email: '', phone: '', status: 'active' };
 
 async function api(method, path, body) {
@@ -274,6 +292,30 @@ export default function Clients() {
     const iPhone = col('phone', 'phone number');
     const iStatus = col('status');
     const iCity = col('city');
+    const iServices = col('services', 'service', 'service names', 'service(s)');
+
+    let services = [];
+    try {
+      const res = await fetch('/api/services', { headers: authHeaders() });
+      if (res.ok) {
+        const json = await res.json().catch(() => null);
+        services = Array.isArray(json) ? json : [];
+      }
+    } catch { /* services stay empty */ }
+    const byName = new Map();
+    services.forEach((s) => byName.set(String(s.name || '').trim().toLowerCase(), s.id));
+
+    function serviceIdsFor(r) {
+      const raw = iServices >= 0 ? String(r[iServices] || '') : '';
+      if (raw.trim()) {
+        const ids = raw
+          .split(/[,;|]+/)
+          .map((n) => byName.get(n.trim().toLowerCase()))
+          .filter(Boolean);
+        if (ids.length) return [...new Set(ids)];
+      }
+      return services.length ? [services[0].id] : [];
+    }
 
     setImporting(true);
     let created = 0;
@@ -281,6 +323,8 @@ export default function Clients() {
     for (const r of table.slice(1)) {
       const name = (r[iName] || '').trim();
       if (!name) continue;
+      const service_ids = serviceIdsFor(r);
+      if (!service_ids.length) { failed += 1; continue; }
       try {
         const sVal = normalizeStatus(iStatus >= 0 ? r[iStatus] : '');
         await api('POST', '/clients', {
@@ -289,6 +333,7 @@ export default function Clients() {
           email: (iEmail >= 0 ? r[iEmail] : '').trim() || null,
           phone: (iPhone >= 0 ? r[iPhone] : '').trim() || null,
           city: (iCity >= 0 ? r[iCity] : '').trim() || null,
+          service_ids,
           ...(sVal === 'active' || sVal === 'inactive' ? { status: sVal } : {}),
         });
         created += 1;
@@ -309,47 +354,20 @@ export default function Clients() {
       {/* Page Content */}
         <div className="flex-1 overflow-y-auto p-container-padding bg-background">
           <div className="max-w-[1440px] mx-auto">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-stack-lg" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(220px, 1fr))` }}>
-              {stats.map((s) => (
-                <div key={s.label} className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-1">
-                  <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">{s.label}</span>
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-headline-lg text-headline-lg text-on-surface">{s.count}</span>
-                    <span className="font-label-md text-label-md text-secondary">{s.pct}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
             {/* Page Header & Actions */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-stack-lg gap-4">
-              <h2 className="font-headline-lg text-headline-lg text-on-surface">Clients</h2>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative w-full md:w-80">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
-                  <input
-                    className="w-full pl-9 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md focus:border-secondary focus:ring-1 focus:ring-secondary outline-none"
-                    placeholder="Search by name, email, or assessee type"
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
-                <select
-                  className="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 font-body-md text-body-md focus:border-secondary focus:ring-1 focus:ring-secondary outline-none"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <option value="">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
+            <div className="flex flex-col md:flex-row md:items-end justify-between mb-stack-lg gap-4">
+              <div>
+                <h2 className="font-headline-lg text-headline-lg text-on-background">Clients</h2>
+                <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+                  Every assessee you work with — individuals and businesses, with the services they&rsquo;ve opted into.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-3">
                 {can('clients.create') && (
                   <button
                     type="button"
                     disabled={importing}
-                    className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors text-on-surface flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2.5 border border-outline-variant rounded-lg font-label-md text-label-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors text-on-surface flex items-center gap-2 shadow-card disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => setImportOpen(true)}
                   >
                     <span className="material-symbols-outlined text-[18px]">upload</span>
@@ -359,23 +377,46 @@ export default function Clients() {
                 <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={handleImportFile} />
                 <button
                   type="button"
-                  className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors text-on-surface flex items-center gap-2"
+                  className="px-4 py-2.5 border border-outline-variant rounded-lg font-label-md text-label-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors text-on-surface flex items-center gap-2 shadow-card"
                   onClick={exportCsv}
                 >
                   <span className="material-symbols-outlined text-[18px]">download</span>
                   Export CSV
                 </button>
                 {can('clients.create') && (
-                  <button
-                    type="button"
-                    className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity flex items-center gap-2"
-                    onClick={() => navigate('/clients/new')}
-                  >
-                    <span className="material-symbols-outlined text-[18px]">add</span>
-                    Add Client
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="px-4 py-2.5 border border-outline-variant rounded-lg font-label-md text-label-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors text-primary flex items-center gap-2 shadow-card"
+                      onClick={() => navigate('/clients/new/quick')}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">bolt</span>
+                      Quick Add
+                    </button>
+                    <button
+                      type="button"
+                      className="px-4 py-2.5 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors flex items-center gap-2 shadow-card"
+                      onClick={() => navigate('/clients/new')}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">add</span>
+                      Add Client
+                    </button>
+                  </>
                 )}
               </div>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-stack-lg" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(220px, 1fr))` }}>
+              {stats.map((s) => (
+                <div key={s.label} className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-1 shadow-card">
+                  <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">{s.label}</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-headline-lg text-headline-lg text-on-surface">{s.count}</span>
+                    <span className="font-label-md text-label-md text-secondary">{s.pct}</span>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {notice && (
@@ -386,7 +427,32 @@ export default function Clients() {
             )}
 
             {/* Data Table Card */}
-            <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
+            <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card overflow-hidden">
+              {/* Table Toolbar */}
+              <div className="flex flex-col sm:flex-row items-center gap-3 p-4 border-b border-outline-variant bg-surface-container-lowest">
+                <div className="relative w-full sm:w-72">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+                  <input
+                    className="w-full pl-9 pr-3 py-2 bg-surface-container-low border border-transparent focus:border-primary rounded-lg font-body-md text-body-md text-on-surface focus:ring-1 focus:ring-primary outline-none transition-colors"
+                    placeholder="Search by name, email, or assessee type"
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+                <select
+                  className="w-full sm:w-auto bg-surface-container-low border border-transparent rounded-lg px-3 py-2 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors cursor-pointer"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+                <span className="ml-auto text-sm text-on-surface-variant whitespace-nowrap">
+                  Showing {filtered.length ? `${start + 1}–${Math.min(start + PAGE_SIZE, filtered.length)}` : '0'} of {filtered.length} clients
+                </span>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -419,15 +485,25 @@ export default function Clients() {
                       </tr>
                     )}
                     {!loading && !error && rows.map((client, i) => (
-                      <tr key={client.id} className={`hover:bg-surface-container-low transition-colors group${i % 2 === 1 ? ' bg-[#F9FAFB]' : ''}`}>
+                      <tr key={client.id} className={`hover:bg-surface-container-low transition-colors group${i % 2 === 1 ? ' bg-[#FAF8FD]' : ''}`}>
                         <td className="px-6 py-4">
-                          {can('clients.edit') ? (
-                            <button type="button" className="text-left cursor-pointer hover:text-secondary transition-colors" onClick={() => navigate(`/clients/${client.id}/edit`)}>
-                              {client.name}
-                            </button>
-                          ) : (
-                            <span className="text-left">{client.name}</span>
-                          )}
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-9 h-9 rounded-full text-on-primary flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColor(client.name)}`}>
+                              {initials(client.name)}
+                            </div>
+                            <div className="min-w-0">
+                              {can('clients.edit') ? (
+                                <button type="button" className="text-left cursor-pointer hover:text-secondary transition-colors font-medium block truncate max-w-[220px]" onClick={() => navigate(`/clients/${client.id}/edit`)}>
+                                  {client.name}
+                                </button>
+                              ) : (
+                                <span className="text-left font-medium block truncate max-w-[220px]">{client.name}</span>
+                              )}
+                              <div className="text-xs text-on-surface-variant font-normal truncate max-w-[220px]">
+                                {[client.city, client.state].filter(Boolean).join(', ') || (typeLabel(client.client_type))}
+                              </div>
+                            </div>
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-on-surface-variant">{typeLabel(client.client_type)}</td>
                         <td className="px-6 py-4">{client.email || '—'}</td>
@@ -456,6 +532,17 @@ export default function Clients() {
                           )}
                         </td>
                         <td className="px-6 py-4 text-right space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {(() => {
+                            const link = waLink(client);
+                            if (link) {
+                              return (
+                                <a href={link} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="text-on-surface-variant hover:text-[#075e54] inline-block">
+                                  <span className="material-symbols-outlined text-[20px]">chat</span>
+                                </a>
+                              );
+                            }
+                            return null;
+                          })()}
                           {can('clients.edit') && (
                             <button type="button" title="Edit" className="text-on-surface-variant hover:text-secondary" onClick={() => navigate(`/clients/${client.id}/edit`)}>
                               <span className="material-symbols-outlined text-[20px]">edit</span>
@@ -494,7 +581,7 @@ export default function Clients() {
                       <button
                         key={p}
                         type="button"
-                        className={`px-3 py-1 rounded font-label-md text-label-md ${p === safePage ? 'border border-secondary bg-secondary-fixed text-secondary' : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'}`}
+                        className={`px-3 py-1 rounded font-label-md text-label-md ${p === safePage ? 'bg-primary text-white border border-primary' : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'}`}
                         onClick={() => setPage(p)}
                       >
                         {p}
@@ -519,7 +606,7 @@ export default function Clients() {
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setModal(null)}>
           <div
-            className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+            className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-stack-md border-b border-outline-variant flex items-center justify-between">
@@ -599,17 +686,18 @@ export default function Clients() {
       {/* Import Dialog */}
       {importOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setImportOpen(false)}>
-          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl w-full max-w-md p-container-padding" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card-lg w-full max-w-md p-container-padding" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Import Clients</h3>
             <p className="font-body-md text-body-md text-on-surface-variant mb-stack-md">
               Download the Excel template below — it has dropdown lists for Assessee Type and Status. Fill it in and upload the file.
             </p>
             <p className="font-data-mono text-data-mono text-on-surface bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 mb-stack-md">
-              Name, Assessee Type, Email, Phone, City, Status
+              Name, Assessee Type, Email, Phone, City, Status, Services (optional)
             </p>
             <ul className="font-body-md text-body-md text-on-surface-variant mb-stack-lg list-disc pl-5 space-y-1">
               <li>Assessee Type: Individual, Proprietor, Partnership, LLP, Private Limited, or Others</li>
               <li>Status (optional): Active or Inactive — left blank, clients are created as Active</li>
+              <li>Services (optional): service names separated by commas — must match services set up in Settings. Left blank, each imported client is assigned to your first available service.</li>
               <li>Only "Name" is required in each row.</li>
             </ul>
             <div className="flex flex-col sm:flex-row justify-end gap-3">
@@ -637,7 +725,7 @@ export default function Clients() {
       {/* Delete Confirmation */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDeleteTarget(null)}>
-          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl w-full max-w-sm p-container-padding" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card-lg w-full max-w-sm p-container-padding" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Delete Client?</h3>
             <p className="font-body-md text-body-md text-on-surface-variant mb-stack-lg">
               This will permanently delete <strong className="text-on-surface">{deleteTarget.name}</strong>. This action cannot be undone.

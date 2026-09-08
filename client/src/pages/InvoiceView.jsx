@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import InvoiceDocument from '../components/InvoiceDocument.jsx';
+import WhatsAppSendAction from '../components/WhatsAppSendAction.jsx';
+import { sendInvoiceNotice, sendOverdueReminder } from '../api/whatsapp.js';
 import { authHeaders } from '../utils/authHeader.js';
 
 export default function InvoiceView() {
@@ -10,6 +12,7 @@ export default function InvoiceView() {
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState('');
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
@@ -51,6 +54,18 @@ export default function InvoiceView() {
     }).from(el).save().finally(() => setDownloading(false));
   }
 
+  async function sendReminderEmail() {
+    setNotice('');
+    try {
+      const res = await fetch(`/api/invoices/${id}/remind`, { method: 'POST', headers: authHeaders() });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
+      setNotice(json?.message || 'Reminder sent.');
+    } catch (err) {
+      setNotice(err.message);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -80,15 +95,57 @@ export default function InvoiceView() {
           <span className="material-symbols-outlined text-[20px]">arrow_back</span>
           <span className="font-label-md text-label-md">Back to Billing</span>
         </button>
-        <button
-          onClick={downloadPdf}
-          disabled={downloading}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          <span className="material-symbols-outlined text-[18px]">download</span>
-          {downloading ? 'Preparing…' : 'Download PDF'}
-        </button>
+        <div className="flex items-center gap-3">
+          <WhatsAppSendAction
+            kind="button"
+            label={invoice.status === 'overdue' ? 'Send Overdue Reminder' : 'Send via WhatsApp'}
+            confirmText={`Send ${invoice.invoice_number} to ${invoice.client_name} via WhatsApp?`}
+            disabled={!invoice.client_phone || ['paid', 'cancelled'].includes(invoice.status)}
+            onSend={() =>
+              invoice.status === 'overdue'
+                ? sendOverdueReminder(invoice.id)
+                : sendInvoiceNotice(invoice.id)
+            }
+            onDone={(msg) => setNotice(msg)}
+          />
+          <button
+            type="button"
+            onClick={sendReminderEmail}
+            disabled={!invoice.client_email || ['paid', 'cancelled'].includes(invoice.status)}
+            className="flex items-center gap-2 px-4 py-2 border border-outline-variant text-on-surface rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={
+              ['paid', 'cancelled'].includes(invoice.status)
+                ? 'Paid or cancelled invoices do not need reminders'
+                : 'Send an email reminder to the client'
+            }
+          >
+            <span className="material-symbols-outlined text-[18px]">notifications_active</span>
+            Send Reminder
+          </button>
+          <button
+            onClick={downloadPdf}
+            disabled={downloading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-[18px]">download</span>
+            {downloading ? 'Preparing…' : 'Download PDF'}
+          </button>
+        </div>
       </div>
+
+      {invoice.client_phone && ['overdue'].includes(invoice.status) && (
+        <div className="mb-stack-md px-4 py-3 rounded-lg bg-[#FEE2E2] border border-[#FECACA] font-body-md text-body-md text-[#991B1B] flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px]">schedule</span>
+          This invoice is overdue. Use the WhatsApp button above to send a payment reminder to {invoice.client_name}.
+        </div>
+      )}
+
+      {notice && (
+        <div className="mb-stack-md px-4 py-3 rounded-lg bg-primary-fixed/40 border border-outline-variant font-body-md text-body-md text-on-surface flex items-center justify-between">
+          <span>{notice}</span>
+          <button type="button" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface" onClick={() => setNotice('')}>Dismiss</button>
+        </div>
+      )}
 
       <div className="flex justify-center">
         <div id="invoice-printable" style={{ width: 700, maxWidth: '100%' }}>

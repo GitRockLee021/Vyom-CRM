@@ -7,8 +7,10 @@ import Billing from './pages/Billing.jsx';
 import InvoiceForm from './pages/InvoiceForm.jsx';
 import InvoiceView from './pages/InvoiceView.jsx';
 import RecordPayment from './pages/RecordPayment.jsx';
+import PaymentForm from './pages/PaymentForm.jsx';
 import Payments from './pages/Payments.jsx';
 import Settings from './pages/Settings.jsx';
+import Tasks from './pages/Tasks.jsx';
 import Roles from './pages/Roles.jsx';
 import Team from './pages/Team.jsx';
 import Login from './pages/Login.jsx';
@@ -59,6 +61,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="clients" element={<Clients />} />
         <Route path="clients/new" element={<ClientForm />} />
+        <Route path="clients/new/quick" element={<ClientForm quick />} />
         <Route path="clients/:id/edit" element={<ClientForm />} />
         <Route path="invoices" element={<Billing />} />
         <Route path="invoices/new" element={<InvoiceForm />} />
@@ -66,7 +69,9 @@ export default function App() {
         <Route path="invoice/:id" element={<InvoiceView />} />
         <Route path="payments" element={<Payments />} />
         <Route path="payments/new" element={<RecordPayment />} />
+        <Route path="payments/:id/edit" element={<PaymentForm />} />
         <Route path="invoices/:id/pay" element={<RecordPayment />} />
+        <Route path="tasks" element={<Tasks />} />
         <Route path="settings" element={<Settings />} />
         <Route path="settings/roles" element={<Roles />} />
         <Route path="settings/team" element={<Team />} />

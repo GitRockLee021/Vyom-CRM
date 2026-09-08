@@ -15,6 +15,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +28,7 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const user = await login(email, password);
+      const user = await login(email, password, remember);
       navigate(user?.role === 'admin' ? '/' : '/', { replace: true });
     } catch (err) {
       setError(err.message || 'Unable to sign in. Please try again.');
@@ -48,7 +49,7 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-[0_2px_4px_rgba(0,0,0,0.05)]">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-card">
           <h2 className="font-headline-md text-headline-md text-on-surface mb-1">Welcome back</h2>
           <p className="font-body-md text-body-md text-on-surface-variant mb-6">Sign in to your account to continue.</p>
 
@@ -108,6 +109,18 @@ export default function Login() {
                   </span>
                 </button>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 font-label-md text-label-md text-on-surface-variant cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-secondary rounded"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                />
+                Remember me
+              </label>
             </div>
 
             <button

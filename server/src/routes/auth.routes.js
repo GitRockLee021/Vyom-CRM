@@ -15,13 +15,23 @@ const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 // Default catalogue copied into every new tenant's workspace.
 const DEFAULT_SERVICES = [
-  { code: 'GST-FILING', name: 'GST Filing', description: 'GST return filing', category: 'taxation', default_fee: null, is_recurring: true },
-  { code: 'ITR', name: 'Income Tax Return', description: 'Income tax return filing', category: 'taxation', default_fee: null, is_recurring: true },
-  { code: 'TDS-RETURN', name: 'TDS Return', description: 'TDS/TCS return filing', category: 'compliance', default_fee: null, is_recurring: true },
-  { code: 'AUDIT-STAT', name: 'Statutory Audit', description: 'Statutory audit of financial statements', category: 'audit', default_fee: null, is_recurring: false },
-  { code: 'TAX-AUDIT', name: 'Tax Audit', description: 'Tax audit u/s 44AB', category: 'audit', default_fee: null, is_recurring: true },
-  { code: 'ADVISORY', name: 'Advisory Consultation', description: 'Tax and compliance advisory', category: 'advisory', default_fee: null, is_recurring: false },
-  { code: 'INCORP', name: 'Company Incorporation', description: 'Company / LLP / firm registration', category: 'registration', default_fee: null, is_recurring: false },
+  { name: 'Bookkeeping', description: 'Ongoing books of account maintenance', default_fee: null, is_recurring: true },
+  { name: 'Financial Statement Preparation', description: 'Preparation of financial statements', default_fee: null, is_recurring: true },
+  { name: 'Payroll Processing', description: 'Payroll computation and statutory compliance', default_fee: null, is_recurring: true },
+  { name: 'Statutory Audit', description: 'Statutory audit under the Companies Act', default_fee: null, is_recurring: false },
+  { name: 'Tax Audit', description: 'Tax audit u/s 44AB', default_fee: null, is_recurring: true },
+  { name: 'Internal Audit', description: 'Internal audit and controls review', default_fee: null, is_recurring: false },
+  { name: 'GST Registration & Filing', description: 'GST registration and return filing', default_fee: null, is_recurring: true },
+  { name: 'Income Tax Return Filing (ITR)', description: 'Income tax return preparation and filing', default_fee: null, is_recurring: true },
+  { name: 'TDS / TCS Compliance', description: 'TDS/TCS deduction, payment and return compliance', default_fee: null, is_recurring: true },
+  { name: 'Company Incorporation (Pvt Ltd, LLP, OPC)', description: 'Incorporation of company or LLP', default_fee: null, is_recurring: false },
+  { name: 'ROC Compliance', description: 'Annual and event-based ROC filings', default_fee: null, is_recurring: true },
+  { name: 'FEMA / FCGPR Compliance', description: 'FEMA and FCGPR filing and compliance', default_fee: null, is_recurring: false },
+  { name: 'Secretarial Services', description: 'Company secretary compliance services', default_fee: null, is_recurring: true },
+  { name: 'Corporate Tax Planning', description: 'Corporate tax structuring and planning', default_fee: null, is_recurring: false },
+  { name: 'International Tax / Transfer Pricing', description: 'International tax and transfer pricing advisory', default_fee: null, is_recurring: false },
+  { name: 'GST Advisory', description: 'GST advisory and opinion', default_fee: null, is_recurring: false },
+  { name: 'Tax Representation & Assessment', description: 'Representation before tax authorities and assessments', default_fee: null, is_recurring: false },
 ];
 
 // Mirrors database/migrations/006_create_roles.sql seed per tenant.
@@ -109,7 +119,7 @@ router.post('/register', async (req, res, next) => {
     const tenant = tenantRes.rows[0];
 
     await client.query(
-      `INSERT INTO settings (tenant_id, company_name, invoice_prefix) VALUES ($1, $2, 'VY-')`,
+      `INSERT INTO settings (tenant_id, company_name, invoice_prefix) VALUES ($1, $2, 'INV-')`,
       [tenant.id, tenantName],
     );
 
@@ -123,9 +133,9 @@ router.post('/register', async (req, res, next) => {
 
     for (const s of DEFAULT_SERVICES) {
       await client.query(
-        `INSERT INTO services (code, name, description, category, default_fee, is_recurring, tenant_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [s.code, s.name, s.description, s.category, s.default_fee, s.is_recurring, tenant.id],
+        `INSERT INTO services (name, description, default_fee, is_recurring, tenant_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [s.name, s.description, s.default_fee, s.is_recurring, tenant.id],
       );
     }
 

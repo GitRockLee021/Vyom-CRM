@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { usePerm } from '../hooks/usePerm.js';
+import { useWhatsApp } from '../hooks/useWhatsApp.js';
+import WhatsAppSendAction from '../components/WhatsAppSendAction.jsx';
+import { sendPaymentConfirmation } from '../api/whatsapp.js';
 
 const PAGE_SIZE = 10;
 
@@ -43,15 +46,23 @@ function fmtCurrency(n) {
 export default function Payments() {
   const navigate = useNavigate();
   const can = usePerm();
+  const waConfig = useWhatsApp();
   const { data, error, loading } = useFetch('/payments');
 
   const [search, setSearch] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [notice, setNotice] = useState('');
 
   const payments = Array.isArray(data) ? data : [];
 
   useEffect(() => { setPage(1); }, [search, methodFilter]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const t = setTimeout(() => setNotice(''), 5000);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   const metrics = useMemo(() => {
     let totalCollected = 0;
@@ -108,7 +119,7 @@ export default function Payments() {
             <button
               type="button"
               onClick={() => navigate('/payments/new')}
-              className="bg-primary text-on-primary font-label-md text-label-md py-2.5 px-5 rounded flex items-center gap-2 hover:opacity-90 transition-opacity whitespace-nowrap"
+              className="bg-primary text-on-primary font-label-md text-label-md py-2.5 px-5 rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity whitespace-nowrap"
             >
               <span className="material-symbols-outlined text-sm">payments</span>
               Record Payment
@@ -117,9 +128,27 @@ export default function Payments() {
         </div>
       </div>
 
+      {notice && (
+        <div className="px-4 py-3 rounded-lg bg-primary-fixed/40 border border-outline-variant font-body-md text-body-md text-on-surface flex items-center justify-between">
+          <span>{notice}</span>
+          <button type="button" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface" onClick={() => setNotice('')}>Dismiss</button>
+        </div>
+      )}
+
+      {waConfig && waConfig.mode === 'dev' && (
+        <div className="px-4 py-3 rounded-lg bg-[#F0FDF4] border border-[#BBF7D0] font-body-md text-body-md text-[#166534] flex items-start gap-2">
+          <span className="material-symbols-outlined text-[18px]">info</span>
+          <span>
+            WhatsApp is in <strong>dev mode</strong> — messages are logged, not actually sent.
+            Add <code className="font-data-mono text-data-mono">META_ACCESS_TOKEN</code> and{' '}
+            <code className="font-data-mono text-data-mono">META_PHONE_NUMBER_ID</code> in <code className="font-data-mono text-data-mono">server/.env</code> to go live.
+          </span>
+        </div>
+      )}
+
       {/* Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md flex flex-col justify-between hover:shadow-[0px_2px_4px_rgba(0,0,0,0.05)] transition-shadow">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card p-stack-md flex flex-col justify-between transition-shadow hover:shadow-[0_4px_12px_rgba(16,14,23,0.08)]">
           <div className="flex justify-between items-start mb-4">
             <span className="font-label-md text-label-md text-on-surface-variant uppercase">Total Collected</span>
             <div className="w-8 h-8 rounded bg-primary-container/10 flex items-center justify-center text-primary">
@@ -128,7 +157,7 @@ export default function Payments() {
           </div>
           <span className="font-headline-lg text-headline-lg text-on-surface">₹{fmtCurrency(metrics.totalCollected)}</span>
         </div>
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md flex flex-col justify-between hover:shadow-[0px_2px_4px_rgba(0,0,0,0.05)] transition-shadow">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card p-stack-md flex flex-col justify-between transition-shadow hover:shadow-[0_4px_12px_rgba(16,14,23,0.08)]">
           <div className="flex justify-between items-start mb-4">
             <span className="font-label-md text-label-md text-on-surface-variant uppercase">Total Payments</span>
             <div className="w-8 h-8 rounded bg-secondary-container/10 flex items-center justify-center text-secondary">
@@ -137,7 +166,7 @@ export default function Payments() {
           </div>
           <span className="font-headline-lg text-headline-lg text-on-surface">{metrics.totalCount}</span>
         </div>
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md flex flex-col justify-between hover:shadow-[0px_2px_4px_rgba(0,0,0,0.05)] transition-shadow">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card p-stack-md flex flex-col justify-between transition-shadow hover:shadow-[0_4px_12px_rgba(16,14,23,0.08)]">
           <div className="flex justify-between items-start mb-4">
             <span className="font-label-md text-label-md text-on-surface-variant uppercase">Bank Transfers</span>
             <div className="w-8 h-8 rounded bg-tertiary-container/10 flex items-center justify-center text-tertiary">
@@ -149,7 +178,7 @@ export default function Payments() {
       </div>
 
       {/* Table Section */}
-      <div className="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden flex flex-col shadow-sm">
+      <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card overflow-hidden flex flex-col">
         {/* Table Toolbar */}
         <div className="p-stack-md border-b border-outline-variant bg-surface-bright flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="relative w-full sm:w-64">
@@ -188,22 +217,23 @@ export default function Payments() {
                 <th className="p-4 font-semibold uppercase tracking-wider">Method</th>
                 <th className="p-4 font-semibold uppercase tracking-wider">Reference</th>
                 <th className="p-4 font-semibold uppercase tracking-wider">Date</th>
+                <th className="p-4 font-semibold uppercase tracking-wider text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="font-body-md text-body-md text-on-surface divide-y divide-outline-variant bg-surface-container-lowest">
               {loading && (
                 <tr>
-                  <td className="p-4 text-on-surface-variant" colSpan="6">Loading payments…</td>
+                  <td className="p-4 text-on-surface-variant" colSpan="7">Loading payments…</td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td className="p-4 text-error" colSpan="6">{error}</td>
+                  <td className="p-4 text-error" colSpan="7">{error}</td>
                 </tr>
               )}
               {!loading && !error && !rows.length && (
                 <tr>
-                  <td className="p-4 text-on-surface-variant" colSpan="6">
+                  <td className="p-4 text-on-surface-variant" colSpan="7">
                     {filtered.length ? 'No payments on this page.' : payments.length ? 'No payments match your filters.' : 'No payments recorded yet. Click "Record Payment" to get started.'}
                   </td>
                 </tr>
@@ -235,12 +265,39 @@ export default function Payments() {
                   </td>
                   <td className="p-4 font-data-mono text-data-mono text-right">{fmtCurrency(p.amount)}</td>
                   <td className="p-4">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded font-label-md text-label-md ${METHOD_BADGE[p.method] || 'bg-gray-50 text-gray-700'}`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-label-md text-label-md ${METHOD_BADGE[p.method] || 'bg-gray-50 text-gray-700'}`}>
                       {METHOD_LABELS[p.method] || p.method}
                     </span>
                   </td>
                   <td className="p-4 text-on-surface-variant font-data-mono text-data-mono">{p.reference_no || '—'}</td>
                   <td className="p-4 text-on-surface-variant">{fmtDate(p.paid_at)}</td>
+                  <td className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      {can('billing.record_payment') && (
+                        <button
+                          type="button"
+                          title="Edit payment"
+                          className="text-on-surface-variant hover:text-primary transition-colors px-1"
+                          onClick={() => navigate(`/payments/${p.id}/edit`)}
+                        >
+                          <span className="material-symbols-outlined text-[18px]">edit</span>
+                        </button>
+                      )}
+                      {can('billing.record_payment') && (
+                        <WhatsAppSendAction
+                          title={
+                            p.client_phone
+                              ? `Send payment confirmation for ${p.invoice_number} to ${p.client_name}`
+                              : `No phone number on record for ${p.client_name}`
+                          }
+                          disabled={!p.client_phone}
+                          confirmText={`Send payment confirmation (${fmtCurrency(p.amount)}) for ${p.invoice_number} to ${p.client_name} via WhatsApp?`}
+                          onSend={() => sendPaymentConfirmation(p.id)}
+                          onDone={(msg) => setNotice(msg)}
+                        />
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

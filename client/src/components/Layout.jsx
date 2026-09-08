@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../hooks/useSettings.js';
+import HealthBadge from './HealthBadge.jsx';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: 'dashboard', end: true },
   { to: '/clients', label: 'Clients', icon: 'group' },
+  { to: '/tasks', label: 'Tasks & Compliance', icon: 'task_alt' },
   { label: 'Billing', icon: 'receipt_long' },
   { label: 'Settings', icon: 'settings' },
 ];
@@ -27,16 +29,16 @@ const FOOTER_ITEMS = [
 ];
 
 const ACTIVE_CLASSES =
-  'text-secondary dark:text-secondary-fixed-dim font-bold bg-secondary-fixed dark:bg-secondary-container rounded-lg font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out';
+  'text-primary dark:text-secondary-fixed-dim font-bold bg-primary/10 dark:bg-secondary-container rounded-lg font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-primary/15 dark:hover:bg-surface-container shadow-[inset_3px_0_0_#0b6bcb] dark:shadow-none transition-all duration-200 ease-in-out';
 
 const INACTIVE_CLASSES =
-  'text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg';
+  'text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center gap-3 px-3 py-2 hover:bg-surface-container-low dark:hover:bg-surface-container transition-all duration-200 ease-in-out rounded-lg';
 
 const SUB_ACTIVE_CLASSES =
-  'block px-3 py-1.5 rounded-lg text-primary font-bold bg-secondary-fixed/30 dark:bg-secondary-container/40 border-r-4 border-primary font-label-md text-label-md';
+  'block px-3 py-1.5 rounded-lg text-primary dark:text-secondary-fixed-dim font-bold bg-primary/10 dark:bg-secondary-container/40 border-l-4 border-primary dark:border-secondary-container font-label-md text-label-md';
 
 const SUB_INACTIVE_CLASSES =
-  'block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md';
+  'block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md';
 
 function FilledIcon({ name, filled = false }) {
   return (
@@ -86,9 +88,9 @@ export default function Layout() {
       >
         {/* Brand/Header */}
         <div className="mb-stack-lg flex items-center gap-3 px-2">
-          <div className="w-10 h-10 rounded bg-primary-container flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
             <span
-              className="material-symbols-outlined text-on-primary-container"
+              className="material-symbols-outlined text-primary"
               style={{ fontVariationSettings: "'FILL' 1" }}
             >
               assured_workload
@@ -220,6 +222,7 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
+            <HealthBadge className="hidden md:flex" />
             <button
               type="button"
               className="relative p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80"
@@ -243,8 +246,13 @@ export default function Layout() {
               <span className="font-label-md text-label-md text-on-surface font-semibold hidden lg:block">
                 {user?.full_name || 'Profile'}
               </span>
-              <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center">
-                <span className="material-symbols-outlined text-sm">person</span>
+              <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-md text-label-md">
+                {(user?.full_name || 'P')
+                  .split(' ')
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase() || 'P'}
               </div>
             </button>
           </div>

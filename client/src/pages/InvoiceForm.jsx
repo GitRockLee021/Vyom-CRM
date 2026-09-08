@@ -40,6 +40,8 @@ export default function InvoiceForm() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const { data } = useFetch('/clients');
+  const { data: serviceData } = useFetch('/services');
+  const services = Array.isArray(serviceData) ? serviceData : [];
 
   const [clientSearch, setClientSearch] = useState('');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
@@ -190,6 +192,12 @@ export default function InvoiceForm() {
     setLineItems((items) => {
       const next = [...items];
       next[idx] = { ...next[idx], [field]: value };
+      if (field === 'service') {
+        const match = services.find((s) => s.name.trim().toLowerCase() === (value || '').trim().toLowerCase());
+        if (match && (next[idx].rate === '' || next[idx].rate === null || Number(next[idx].rate) === 0)) {
+          next[idx].rate = match.default_fee != null ? String(match.default_fee) : next[idx].rate;
+        }
+      }
       return next;
     });
   }
@@ -259,7 +267,7 @@ export default function InvoiceForm() {
   if (isEdit && paidInvoice) {
     return (
       <div className="bg-surface font-body-md text-on-surface h-screen flex items-center justify-center p-container-padding">
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm w-full max-w-md p-stack-lg text-center">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card-lg w-full max-w-md p-stack-lg text-center">
           <div className="mx-auto w-12 h-12 rounded-full bg-error-container/40 flex items-center justify-center mb-stack-md">
             <span className="material-symbols-outlined text-error">lock</span>
           </div>
@@ -362,7 +370,7 @@ export default function InvoiceForm() {
               {/* Information Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
                 {/* Billed To */}
-                <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md shadow-sm">
+                <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-md shadow-card">
                   <div className="flex justify-between items-center mb-stack-md">
                     <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Billed To</label>
                     {!isEdit && (
@@ -430,7 +438,7 @@ export default function InvoiceForm() {
                 </div>
 
                 {/* Invoice Details */}
-                <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md shadow-sm flex flex-col gap-4">
+                <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-md shadow-card flex flex-col gap-4">
                   <h3 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Invoice Details</h3>
                   <div>
                     <label className={labelCls}>Invoice Number</label>
@@ -465,7 +473,7 @@ export default function InvoiceForm() {
               </div>
 
               {/* Line Items */}
-              <div className="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+              <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-card">
                 <div className="p-stack-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
                   <h3 className="font-headline-md text-headline-md text-on-surface">Line Items</h3>
                 </div>
@@ -543,11 +551,11 @@ export default function InvoiceForm() {
               {/* Totals & Notes */}
               <div className="flex flex-col-reverse lg:flex-row gap-gutter items-start">
                 <div className="flex-1 space-y-gutter w-full">
-                  <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md shadow-sm">
+                  <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-md shadow-card">
                     <label className="font-label-md text-label-md text-on-surface-variant block mb-stack-sm uppercase tracking-wide">Notes to Client</label>
                     <textarea className="w-full p-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:border-secondary focus:ring-1 focus:ring-secondary outline-none font-body-md text-body-md h-24 resize-none text-on-surface" placeholder="Any additional notes or payment instructions..." value={notes} onChange={(e) => setNotes(e.target.value)} />
                   </div>
-                  <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md shadow-sm">
+                  <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-md shadow-card">
                     <label className="font-label-md text-label-md text-on-surface-variant block mb-stack-sm uppercase tracking-wide">Terms &amp; Conditions</label>
                     <textarea className="w-full p-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:border-secondary focus:ring-1 focus:ring-secondary outline-none font-body-md text-body-md h-24 resize-none text-on-surface-variant" placeholder="Standard T&Cs..." value={terms} onChange={(e) => setTerms(e.target.value)} />
                   </div>

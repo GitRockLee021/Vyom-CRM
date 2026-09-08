@@ -3,6 +3,40 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 const TOKEN_KEY = 'vyom_token';
 const USER_KEY = 'vyom_user';
 
+// Session persistence: "Remember me" uses localStorage (survives browser restarts),
+// otherwise sessionStorage (cleared when the tab/browser closes).
+const sessionStore = {
+  get: (key) => localStorage.getItem(key) || sessionStorage.getItem(key),
+  set: (key, value, remember) => {
+    const target = remember ? localStorage : sessionStorage;
+    const other = remember ? sessionStorage : localStorage;
+    target.setItem(key, value);
+    other.removeItem(key);
+  },
+  remove: (key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  },
+};
+
+function storeOf(key) {
+  if (localStorage.getItem(key)) return localStorage;
+  if (sessionStorage.getItem(key)) return sessionStorage;
+  return null;
+}
+
+function readStoredAuth() {
+  try {
+    const rawUser = sessionStore.get(USER_KEY);
+    return {
+      token: sessionStore.get(TOKEN_KEY) || null,
+      user: rawUser ? JSON.parse(rawUser) : null,
+    };
+  } catch {
+    return { token: null, user: null };
+  }
+}
+
 const AuthContext = createContext(null);
 
 async function authRequest(path, body) {
@@ -17,15 +51,9 @@ async function authRequest(path, body) {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const raw = localStorage.getItem(USER_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || null);
+  const { token: initialToken, user: initialUser } = readStoredAuth();
+  const [user, setUser] = useState(initialUser);
+  const [token, setToken] = useState(initialToken);
   const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
@@ -44,12 +72,13 @@ export function AuthProvider({ children }) {
         if (cancelled) return;
         if (res.ok && data?.user) {
           setUser(data.user);
-          localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+          const target = storeOf(TOKEN_KEY) || localStorage;
+          target.setItem(USER_KEY, JSON.stringify(data.user));
         } else {
           setUser(null);
           setToken(null);
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
+          sessionStore.remove(TOKEN_KEY);
+          sessionStore.remove(USER_KEY);
         }
       } catch {
         if (!cancelled) setInitializing(false);
@@ -62,34 +91,34 @@ export function AuthProvider({ children }) {
     };
   }, [token]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, remember = false) => {
     const data = await authRequest('/login', { email, password });
-    applyAuth(data);
+    applyAuth(data, remember);
     return data.user;
   };
 
   const register = async ({ full_name, email, password, company_name }) => {
     const data = await authRequest('/register', { full_name, email, password, company_name });
-    applyAuth(data);
+    applyAuth(data, true);
     return data.user;
   };
 
   const acceptInvite = async ({ token, full_name, email, password }) => {
     const data = await authRequest('/accept-invite', { token, full_name, email, password });
-    applyAuth(data);
+    applyAuth(data, true);
     return data.user;
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    sessionStore.remove(TOKEN_KEY);
+    sessionStore.remove(USER_KEY);
   };
 
-  function applyAuth(data) {
-    localStorage.setItem(TOKEN_KEY, data.token);
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  function applyAuth(data, remember) {
+    sessionStore.set(TOKEN_KEY, data.token, remember);
+    sessionStore.set(USER_KEY, JSON.stringify(data.user), remember);
     setToken(data.token);
     setUser(data.user);
   }

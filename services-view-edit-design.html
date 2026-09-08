@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vyom CRM — Edit Client Profile | Services Opted redesign</title>
+<style>
+  /* Replica of client/tailwind.config.js design tokens */
+  :root {
+    --background: #f4f2f7;
+    --surface: #ffffff;
+    --surface-container-low: #f3f0f6;
+    --surface-container-lowest: #ffffff;
+    --surface-container: #eeeaf1;
+    --surface-container-high: #e9e5ec;
+    --outline-variant: #e3dfe8;
+    --outline: #757c89;
+    --primary: #0b6bcb;
+    --primary-fixed: #d7ebff;
+    --on-surface: #1c1b1f;
+    --on-surface-variant: #49454f;
+    --error: #ba1a1a;
+    --error-container: #ffdad6;
+    --on-error-container: #93000a;
+    --shadow-card: 0 1px 2px rgba(16,14,23,.06), 0 1px 3px rgba(16,14,23,.05);
+    --radius: 0.5rem;
+    --radius-xl: 0.875rem;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    background: var(--background); color: var(--on-surface); font-size: 14px;
+  }
+
+  .demo-bar {
+    background: var(--primary); color: #fff; padding: 7px 20px; font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 60;
+  }
+  .demo-bar .pill { background: rgba(255,255,255,.22); border-radius: 999px; padding: 1px 10px; font-size: 11px; font-weight: 700; }
+
+  .page { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .page .inside { max-width: 1100px; margin: 0 auto; }
+
+  /* ---------- Page header (replica of ClientForm.jsx) ---------- */
+  .crumb-row { display: flex; align-items: center; gap: 6px; color: var(--on-surface-variant); font-size: 14px; margin-bottom: 8px; }
+  .crumb-row a { color: var(--on-surface-variant); text-decoration: none; }
+  .crumb-row a:hover { color: var(--primary); }
+  .crumb-row .chip { color: var(--primary); font-weight: 500; }
+  .head-line { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--outline-variant); padding-bottom: 24px; }
+  .page-title { font-size: 24px; font-weight: 700; line-height: 32px; }
+  .page-sub { color: var(--on-surface-variant); margin-top: 4px; }
+  .head-actions { display: flex; align-items: center; gap: 12px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px; border-radius: var(--radius);
+    padding: 8px 16px; font-size: 12px; font-weight: 600; letter-spacing: .03em;
+    border: 1px solid var(--outline-variant); background: var(--surface-container-lowest);
+    color: var(--primary); cursor: pointer; font-family: inherit; transition: background .12s;
+  }
+  .btn:hover { background: var(--surface-container-low); }
+  .btn.primary { background: var(--primary); color: #fff; border-color: transparent; }
+  .btn.primary:hover { background: var(--primary-container, #0a5ab0); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ---------- 12-col grid (replica) ---------- */
+  .grid-12 { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; align-items: start; padding-top: 24px; }
+  .col-7 { grid-column: span 7; }
+  .col-5 { grid-column: span 5; }
+  @media (max-width: 1000px) { .col-7, .col-5 { grid-column: span 12; } .col-5 > * { position: static !important; } }
+
+  /* ---------- Card (cardCls = bg-surface-container-lowest ... p-6) ---------- */
+  .card { background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); box-shadow: var(--shadow-card); padding: 24px; }
+  .card + .card { margin-top: 16px; }
+  .card-title { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 600; color: var(--on-surface); border-bottom: 1px solid var(--outline-variant); padding-bottom: 16px; margin-bottom: 24px; }
+  .card-title .ico { color: var(--primary); font-size: 20px; }
+
+  .frow { margin-bottom: 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+  label.lbl { font-size: 12px; font-weight: 600; letter-spacing: .03em; color: var(--on-surface-variant); }
+  .req { color: var(--error); }
+  .field > .input, .field > select {
+    width: 100%; padding: 8px 12px; background: var(--surface-container-lowest);
+    border: 1px solid var(--outline-variant); border-radius: var(--radius); font: inherit; color: var(--on-surface); outline: none;
+  }
+  .field > .input:focus, .field > select:focus { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .span2 { grid-column: 1 / -1; }
+
+  /* ---------- SERVICES OPTED (reworked) ---------- */
+  .combo { position: relative; }
+  .combo-field {
+    width: 100%; min-height: 44px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant);
+    border-radius: var(--radius); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 40px 6px 8px;
+    cursor: text; transition: border-color .12s, box-shadow .12s;
+  }
+  .combo-field:focus-within { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .combo-field .ph { color: var(--on-surface-variant); font-size: 14px; padding: 2px 6px; }
+  .combo-caret { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--outline); font-size: 15px; pointer-events: none; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px; background: var(--primary); color: #fff;
+    border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 500;
+  }
+  .chip .rm { color: inherit; cursor: pointer; border: none; background: transparent; padding: 0; display: grid; place-items: center; font-size: 14px; line-height: 1; opacity: .9; font-family: inherit; }
+  .chip .rm:hover { opacity: 1; }
+
+  .combo-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: var(--surface-container-lowest);
+    border: 1px solid var(--outline-variant); border-radius: var(--radius); box-shadow: var(--shadow-card), 0 16px 40px rgba(16,14,23,.16);
+    z-index: 50; overflow: hidden; display: none;
+  }
+  .combo-menu.open { display: block; }
+  .combo-search { padding: 10px 12px; border-bottom: 1px solid var(--outline-variant); }
+  .combo-search input { width: 100%; padding: 7px 10px; border: 1px solid var(--outline-variant); border-radius: var(--radius); font: inherit; font-size: 13px; outline: none; }
+  .combo-search input:focus { border-color: var(--primary); }
+  .combo-list { max-height: 232px; overflow-y: auto; }
+  .combo-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--outline-variant); }
+  .combo-item:last-child { border-bottom: none; }
+  .combo-item:hover { background: var(--surface-container-low); }
+  .combo-item .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .combo-item .g { flex: 1; }
+  .combo-item .t { font-size: 14px; font-weight: 500; }
+  .combo-item .r { font-size: 12px; color: var(--on-surface-variant); font-weight: 500; }
+  .combo-item .check { width: 17px; height: 17px; border: 2px solid var(--outline-variant); border-radius: 5px; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: transparent; flex-shrink: 0; }
+  .combo-item.on .check { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .combo-empty { padding: 16px; text-align: center; color: var(--on-surface-variant); font-size: 13px; }
+
+  .benefit {
+    display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border-radius: var(--radius);
+    background: var(--primary-fixed); border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+    font-size: 13px; color: var(--on-surface-variant); margin-top: 12px;
+  }
+  .benefit .ico { color: #166534; font-size: 18px; margin-top: 1px; }
+  .benefit b { color: var(--on-surface); font-weight: 600; }
+
+  .foot-actions { display: flex; justify-content: flex-end; gap: 12px; }
+
+  /* ---------- Preview (Will be created) ---------- */
+  .preview-card { background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); box-shadow: var(--shadow-card); }
+  .preview-head { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 600; border-bottom: 1px solid var(--outline-variant); padding: 16px 24px; margin-bottom: 16px; }
+  .preview-head .ico { color: #166534; font-size: 20px; font-variation-settings: 'FILL' 1; }
+  .preview-body { padding: 0 24px 24px; max-height: 420px; overflow-y: auto; }
+  .empty { color: var(--on-surface-variant); text-align: center; padding: 24px 0; }
+  .plan { padding: 11px 0; border-bottom: 1px dashed var(--outline-variant); }
+  .plan:last-child { border-bottom: none; }
+  .plan-h { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .plan-h .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .plan-h b { font-size: 13px; font-weight: 600; }
+  .task { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0 3px 17px; color: var(--on-surface); }
+  .task .sm { width: 15px; height: 15px; border-radius: 4px; border: 2px solid var(--outline-variant); display: grid; place-items: center; font-size: 10px; flex-shrink: 0; }
+  .task.auto .sm { border-color: var(--primary); background: var(--primary); color: #fff; }
+  .task .due { font-size: 11px; color: var(--on-surface-variant); margin-left: auto; font-weight: 500; white-space: nowrap; }
+  .task .tag { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 5px; margin-left: 6px; }
+  .tag.recur { background: #fef3c7; color: #92400e; }
+  .tag.auto { background: #dcfce7; color: #166534; }
+
+  /* ---------- Toast (undo) ---------- */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(90px); background: var(--on-surface); color: #fff;
+    padding: 10px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.3); z-index: 90; opacity: 0; transition: transform .2s, opacity .2s; white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast .undo { cursor: pointer; font-weight: 800; color: #7cc4ff; padding: 2px 4px; border-radius: 6px; }
+  .toast .undo:hover { background: rgba(255,255,255,.15); }
+
+  /* ---------- View mode strip (read-only, no ✕) ---------- */
+  .view-mode-demo { margin-top: 40px; border-top: 1px dashed var(--outline); padding-top: 24px; }
+  .vm-title { font-size: 13px; font-weight: 700; letter-spacing: .04em; color: var(--on-surface-variant); text-transform: uppercase; margin-bottom: 8px; }
+  .vm-sub { font-size: 13px; color: var(--on-surface-variant); margin-bottom: 16px; }
+  .list-row {
+    display: flex; align-items: center; gap: 20px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant);
+    border-radius: var(--radius-xl); box-shadow: var(--shadow-card); padding: 16px 20px;
+  }
+  .list-row .row-name { font-weight: 600; width: 150px; flex-shrink: 0; font-size: 14px; }
+  .chips-stack { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .chip.ro { background: var(--primary); color: #fff; border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 500; pointer-events: none; }
+  .chip.more { background: var(--surface-container-high); color: var(--on-surface-variant); }
+  .edit-link { margin-left: auto; flex-shrink: 0; font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer; display: inline-flex; gap: 5px; align-items: center; text-decoration: none; }
+  .edit-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <span class="pill" id="mode-pill">EDIT MODE</span>
+  <span id="mode-txt">Inside the edit form — chips have ✕ (safe via Undo)</span>
+  <span style="margin-left:auto;font-weight:500;">This is a faithful replica of the current <b>Edit Client Profile</b> screen</span>
+</div>
+
+<div class="page">
+  <div class="inside">
+
+    <!-- ===== Page header (replica) ===== -->
+    <div>
+      <div class="crumb-row">
+        <a href="#">Clients</a>
+        <span>›</span>
+        <a href="#">Rathi Traders</a>
+        <span>›</span>
+        <span class="chip">Edit</span>
+      </div>
+      <div class="head-line">
+        <div>
+          <div class="page-title">Edit Client Profile</div>
+          <div class="page-sub">Update information and account details for Rathi Traders.</div>
+        </div>
+        <div class="head-actions">
+          <button class="btn">Cancel</button>
+          <button class="btn primary">Save Changes</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-12">
+      <!-- ===== LEFT (7 cols) ===== -->
+      <div class="col-7">
+        <div class="card">
+          <div class="card-title"><span class="ico">🏛</span> Basic Information</div>
+
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl" for="assessee">Assessee Type</label>
+              <select id="assessee"><option>Proprietor</option><option selected>Private Limited</option><option>Individual</option><option>Partnership</option><option>LLP</option><option>Others</option></select>
+            </div>
+            <div class="field">
+              <label class="lbl" for="name">Name <span class="req">*</span></label>
+              <input class="input" id="name" value="Rathi Traders" />
+            </div>
+            <div class="field span2">
+              <label class="lbl" for="phone">Phone Number <span class="req">*</span></label>
+              <input class="input" id="phone" value="+91 98450 12345" />
+            </div>
+          </div>
+
+          <!-- ====== SERVICES OPTED (reworked, fits the form) ====== -->
+          <div class="field" style="margin-top:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+              <label class="lbl">Services Opted</label>
+              <button class="btn sm" id="edit-svc-btn" style="padding:5px 10px;font-size:12px;">✏️ Edit services</button>
+            </div>
+
+            <div class="combo" id="combo">
+              <div class="combo-field" id="combo-field" tabindex="0">
+                <span id="wrap-chips"></span>
+                <span class="ph" id="combo-ph">Search &amp; select services…</span>
+              </div>
+              <span class="combo-caret">▾</span>
+
+              <div class="combo-menu" id="combo-menu">
+                <div class="combo-search"><input id="q" type="text" placeholder="Search services…" /></div>
+                <div class="combo-list" id="combo-list"></div>
+              </div>
+            </div>
+
+            <div class="benefit">
+              <span class="ico">✓</span>
+              <span><b id="benefit-count">2 services</b> selected — their filing tasks appear automatically under Tasks &amp; Compliance and stay in sync if you edit them later.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="font-size:16px;font-weight:600;padding:0;border:none;margin:0;">
+            <span class="ico">📄</span>
+            <button style="border:none;background:none;cursor:pointer;font:inherit;color:var(--primary);display:flex;align-items:center;gap:4px;">
+              <span style="color:var(--on-surface);">▸</span> Add more details (email, address, notes, status)
+            </button>
+          </div>
+        </div>
+
+        <div class="foot-actions" style="margin-top:18px;">
+          <button class="btn">Cancel</button>
+          <button class="btn primary">Save Changes</button>
+        </div>
+      </div>
+
+      <!-- ===== RIGHT (5 cols) ===== -->
+      <div class="col-5">
+        <div class="preview-card" style="position:sticky;top:20px;">
+          <div class="preview-head"><span class="ico">✓</span> Will be created</div>
+          <div class="preview-body" id="pv-body"><div class="empty">Pick a service to see the filing tasks that follow it.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== VIEW MODE demo (read-only, no ✕) ===== -->
+    <div class="view-mode-demo">
+      <div class="vm-title">View mode — how services render when someone is just VIEWING the client</div>
+      <div class="vm-sub">No ✕ anywhere. Chips are inert; the only affordance is an "Edit services" link that jumps to the form.</div>
+      <div class="list-row">
+        <div class="row-name">Rathi Traders</div>
+        <div class="chips-stack">
+          <span class="chip ro">GST Registration &amp; Filing</span>
+          <span class="chip ro">TDS / TCS Compliance</span>
+          <span class="chip more">+1 more</span>
+        </div>
+        <a class="edit-link" id="view-edit-btn">✏️ &nbsp;Edit services</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-msg"></span><span class="undo" id="toast-undo">Undo</span></div>
+
+<script>
+  const SERVICES = [
+    { id: 1, name: "GST Registration & Filing", dot: "#0b6bcb", due: "Monthly · 11th & 20th", tasks: [
+      { t: "File GSTR-1", due: "Monthly · 11th", z: 1 },
+      { t: "File GSTR-3B", due: "Monthly · 20th", z: 1 }]},
+    { id: 2, name: "TDS / TCS Compliance", dot: "#16a34a", due: "Quarterly 24Q · 31st", tasks: [
+      { t: "Pay TDS", due: "Monthly · 7th", z: 1 },
+      { t: "File 24Q return", due: "Quarterly · 31st", z: 1 }]},
+    { id: 3, name: "Income Tax Return (ITR)", dot: "#7c3aed", due: "Annual · 31 Jul", tasks: [
+      { t: "File ITR", due: "Annual · 31 Jul", z: 1 }]},
+    { id: 4, name: "Statutory Audit", dot: "#0d9488", due: "One-off · per FY", tasks: [
+      { t: "Draft financial statements", due: "One-off · per FY", z: 0 },
+      { t: "Finalise statutory audit", due: "One-off · per FY", z: 0 }]},
+    { id: 5, name: "ROC Compliance", dot: "#b45309", due: "Annual · 31 Oct", tasks: [
+      { t: "File AOC-4", due: "Annual · 31 Oct", z: 1 },
+      { t: "File MGT-7", due: "Annual · 31 Oct", z: 1 }]},
+    { id: 6, name: "Bookkeeping", dot: "#16a34a", due: "Monthly · 5th", tasks: [
+      { t: "Close monthly books", due: "Monthly · 5th", z: 1 }]},
+    { id: 7, name: "Payroll Processing", dot: "#16a34a", due: "Monthly · 28th", tasks: [
+      { t: "Run monthly payroll", due: "Monthly · 28th", z: 1 }]},
+    { id: 8, name: "GST Advisory", dot: "#0b6bcb", due: "On request", tasks: [
+      { t: "Advisory on call", due: "On request", z: 0 }]},
+  ];
+
+  let selected = new Set([1, 2]);
+  let editing = false;
+  const svc = (id) => SERVICES.find((s) => s.id === id);
+
+  function chipEl(id) {
+    const s = svc(id);
+    const el = document.createElement('span');
+    el.className = 'chip';
+    el.dataset.id = id;
+    const txt = document.createElement('span');
+    txt.textContent = s.name;
+    el.append(txt);
+    if (editing) {
+      const rm = document.createElement('button');
+      rm.className = 'rm';
+      rm.type = 'button';
+      rm.innerHTML = '&#10005;';
+      rm.title = 'Remove';
+      rm.addEventListener('click', (e) => { e.stopPropagation(); removeService(id); });
+      el.append(rm);
+    }
+    return el;
+  }
+
+  function renderChips() {
+    const wrap = document.getElementById('wrap-chips');
+    wrap.innerHTML = '';
+    selected.forEach((id) => wrap.appendChild(chipEl(id)));
+    document.getElementById('combo-ph').style.display = selected.size ? 'none' : '';
+    document.getElementById('benefit-count').textContent = selected.size + ' ' + (selected.size === 1 ? 'service' : 'services');
+  }
+
+  function renderCombo() {
+    const q = (document.getElementById('q').value || '').toLowerCase();
+    const list = document.getElementById('combo-list');
+    const rows = SERVICES.filter((s) => !q || s.name.toLowerCase().includes(q));
+    if (!rows.length) { list.innerHTML = '<div class="combo-empty">No services match.</div>'; return; }
+    list.innerHTML = rows.map((s) => `
+      <div class="combo-item ${selected.has(s.id) ? 'on' : ''}" data-id="${s.id}">
+        <span class="check">&#10003;</span>
+        <span class="dot" style="background:${s.dot}"></span>
+        <div class="g"><div class="t">${s.name}</div><div class="r">${s.due}</div></div>
+      </div>`).join('');
+    list.querySelectorAll('.combo-item').forEach((it) => {
+      it.addEventListener('click', () => {
+        const id = Number(it.dataset.id);
+        selected.has(id) ? selected.delete(id) : selected.add(id);
+        renderAll();
+      });
+    });
+  }
+
+  function renderPreview() {
+    const pv = document.getElementById('pv-body');
+    if (!selected.size) { pv.innerHTML = '<div class="empty">Pick a service to see the filing tasks that follow it.</div>'; return; }
+    pv.innerHTML = Array.from(selected).map((id) => {
+      const s = svc(id);
+      return `<div class="plan"><div class="plan-h"><span class="dot" style="background:${s.dot}"></span><b>${s.name}</b></div>
+        ${s.tasks.map((tk) => `<div class="task auto"><span class="sm">&#10003;</span>${tk.t}<span class="tag ${tk.z ? 'recur' : 'auto'}">${tk.z ? '↻ recurring' : '⚡ one-off'}</span><span class="due">${tk.due}</span></div>`).join('')}
+      </div>`;
+    }).join('');
+  }
+
+  function renderAll() {
+    renderChips();
+    renderCombo();
+    renderPreview();
+  }
+
+  // ---- removal with undo (the accidental-click safeguard) ----
+  function removeService(id) {
+    const name = svc(id).name;
+    selected.delete(id);
+    renderAll();
+    document.getElementById('toast-msg').innerHTML = `Removed <b>${name}</b> &nbsp;`;
+    const undo = document.getElementById('toast-undo');
+    undo.onclick = () => { selected.add(id); renderAll(); hideToast(); };
+    showToast();
+  }
+  let toastTimer;
+  function showToast() {
+    const t = document.getElementById('toast');
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 6000);
+  }
+  function hideToast() { document.getElementById('toast').classList.remove('show'); }
+
+  // ---- combo open/close ----
+  document.getElementById('combo-field').addEventListener('click', () => {
+    if (!editing) return;
+    document.getElementById('combo-menu').classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('combo').contains(e.target)) document.getElementById('combo-menu').classList.remove('open');
+  });
+  document.getElementById('q').addEventListener('input', renderCombo);
+
+  // ---- "Edit services" toggles edit mode; ✕ only appears while editing ----
+  const editBtn = document.getElementById('edit-svc-btn');
+  editBtn.addEventListener('click', () => {
+    editing = !editing;
+    editBtn.innerHTML = editing ? '&#10003; Done' : '&#9998;&#65039; Edit services';
+    renderChips();
+    if (editing) {
+      document.getElementById('combo-menu').classList.add('open');
+      document.getElementById('combo-field').focus();
+    } else {
+      document.getElementById('combo-menu').classList.remove('open');
+      document.getElementById('q').value = '';
+      renderCombo();
+    }
+  });
+
+  // ---- view-mode "Edit services" demo link (list-row) ----
+  document.getElementById('view-edit-btn').addEventListener('click', () => {
+    editing = false;
+    editBtn.innerHTML = '&#9998;&#65039; Edit services';
+    renderChips();
+    document.getElementById('mode-pill').textContent = 'EDIT MODE';
+    document.getElementById('mode-txt').innerHTML = 'In the real app this navigates to <b>/clients/:id/edit</b> and scrolls to Services Opted.';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.getElementById('combo-field').focus();
+    document.getElementById('combo-menu').classList.add('open');
+  });
+
+  renderAll();
+</script>
+</body>
+</html>

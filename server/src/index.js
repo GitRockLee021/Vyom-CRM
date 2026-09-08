@@ -14,6 +14,7 @@ import settingsRouter from './routes/settings.routes.js';
 import rolesRouter from './routes/roles.routes.js';
 import dashboardRouter from './routes/dashboard.routes.js';
 import teamRouter from './routes/team.routes.js';
+import whatsappRouter from './routes/whatsapp.routes.js';
 import authRouter from './routes/auth.routes.js';
 import { requireAuth } from './middleware/auth.middleware.js';
 import { notFound, errorHandler } from './middleware/error.middleware.js';
@@ -42,6 +43,7 @@ app.use('/api/settings', requireAuth, settingsRouter);
 app.use('/api/roles', requireAuth, rolesRouter);
 app.use('/api/dashboard', requireAuth, dashboardRouter);
 app.use('/api/team', requireAuth, teamRouter);
+app.use('/api/whatsapp', requireAuth, whatsappRouter);
 
 // Serve the built React client (static files + SPA fallback). This lets a single
 // service host both the API and the frontend under one origin.

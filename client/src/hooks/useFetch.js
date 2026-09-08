@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { authHeaders } from '../utils/authHeader.js';
 
 export function useFetch(path, options = {}) {
+  const enabled = options.enabled !== false;
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     let cancelled = false;
     async function run() {
       try {
@@ -29,7 +31,7 @@ export function useFetch(path, options = {}) {
     return () => {
       cancelled = true;
     };
-  }, [path, tick]);
+  }, [path, tick, enabled]);
 
   return { data, error, loading, reload: () => setTick((t) => t + 1) };
 }

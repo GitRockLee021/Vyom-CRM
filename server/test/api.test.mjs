@@ -93,10 +93,13 @@ test('invite flow + multi-tenant isolation', async () => {
 
   const consultant = await inviteAccept(a.token, `ta-consultant-${stamp}@example.com`, 'consultant', 'A Consultant');
 
+  const svc = await api('/api/services', { method: 'POST', token: a.token, body: { name: 'Tenant A Service' } });
+  assert.equal(svc.status, 201);
+
   const client = await api('/api/clients', {
     method: 'POST',
     token: a.token,
-    body: { name: 'Tenant A Client', client_type: 'business' },
+    body: { name: 'Tenant A Client', client_type: 'business', service_ids: [svc.data.id] },
   });
   assert.equal(client.status, 201);
 
@@ -162,10 +165,13 @@ test('role permission matrix', async () => {
 
   assert.ok(admin.user.role_id, 'admin should be linked to a role row');
 
+  const baseSvc = await api('/api/services', { method: 'POST', token: adminToken, body: { name: 'Perm Service' } });
+  assert.equal(baseSvc.status, 201);
+
   const client = await api('/api/clients', {
     method: 'POST',
     token: adminToken,
-    body: { name: 'Perm Client', client_type: 'business' },
+    body: { name: 'Perm Client', client_type: 'business', service_ids: [baseSvc.data.id] },
   });
   const invoice = await api('/api/invoices', {
     method: 'POST',
@@ -175,7 +181,7 @@ test('role permission matrix', async () => {
 
   // Consultant: clients + billing view/create, services/engagements create, no deletes, no billing.edit
   assert.equal((await api('/api/clients', { token: consultant.token })).status, 200);
-  assert.equal((await api('/api/clients', { method: 'POST', token: consultant.token, body: { name: 'C Client', client_type: 'individual' } })).status, 201);
+  assert.equal((await api('/api/clients', { method: 'POST', token: consultant.token, body: { name: 'C Client', client_type: 'individual', service_ids: [baseSvc.data.id] } })).status, 201);
   assert.equal((await api(`/api/clients/${client.data.id}`, { method: 'PUT', token: consultant.token, body: { notes: 'x' } })).status, 200);
   assert.equal((await api(`/api/clients/${client.data.id}`, { method: 'DELETE', token: consultant.token })).status, 403);
   assert.equal((await api('/api/invoices', { token: consultant.token })).status, 200);
@@ -184,7 +190,7 @@ test('role permission matrix', async () => {
   assert.equal((await api(`/api/invoices/${invoice.data.id}`, { method: 'DELETE', token: consultant.token })).status, 403);
   assert.equal((await api('/api/settings', { method: 'PUT', token: consultant.token, body: { company_name: 'Hack' } })).status, 403);
 
-  const svc = await api('/api/services', { method: 'POST', token: consultant.token, body: { code: 'SVC-C', name: 'Consultant Service', category: 'advisory' } });
+  const svc = await api('/api/services', { method: 'POST', token: consultant.token, body: { name: 'Consultant Service' } });
   assert.equal(svc.status, 201);
   assert.equal((await api(`/api/services/${svc.data.id}`, { method: 'PUT', token: consultant.token, body: { name: 'Renamed' } })).status, 200);
   assert.equal((await api('/api/engagements', { method: 'POST', token: consultant.token, body: { client_id: client.data.id, service_id: svc.data.id, title: 'C Engagement' } })).status, 201);
@@ -198,7 +204,7 @@ test('role permission matrix', async () => {
   assert.equal((await api(`/api/invoices/${invoice.data.id}/payments`, { method: 'POST', token: accountant.token, body: { amount: 100, method: 'bank_transfer' } })).status, 201);
   assert.equal((await api(`/api/invoices/${invoice.data.id}`, { method: 'DELETE', token: accountant.token })).status, 403);
   assert.equal((await api('/api/services', { token: accountant.token })).status, 200);
-  assert.equal((await api('/api/services', { method: 'POST', token: accountant.token, body: { code: 'SVC-A', name: 'X' } })).status, 403);
+  assert.equal((await api('/api/services', { method: 'POST', token: accountant.token, body: { name: 'X' } })).status, 403);
   assert.equal((await api('/api/engagements', { method: 'POST', token: accountant.token, body: { client_id: client.data.id, service_id: svc.data.id, title: 'A' } })).status, 403);
   assert.equal((await api('/api/roles', { method: 'POST', token: accountant.token, body: { name: 'Nope', permissions: {} } })).status, 403);
 

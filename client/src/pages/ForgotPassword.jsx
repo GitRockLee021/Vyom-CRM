@@ -41,7 +41,7 @@ export default function ForgotPassword() {
           </div>
         </div>
 
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-[0_2px_4px_rgba(0,0,0,0.05)]">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-card">
           {result ? (
             <>
               <h2 className="font-headline-md text-headline-md text-on-surface mb-1">Check your email</h2>

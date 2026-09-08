@@ -39,8 +39,71 @@ async function autoMigrate() {
       );
       CREATE INDEX IF NOT EXISTS idx_client_services_client ON client_services (client_id);
       CREATE INDEX IF NOT EXISTS idx_client_services_service ON client_services (service_id);
+
+      CREATE TABLE IF NOT EXISTS wa_messages (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id     INTEGER NOT NULL,
+        direction     VARCHAR(10) NOT NULL DEFAULT 'outbound'
+                      CHECK (direction IN ('outbound', 'inbound')),
+        wa_message_id VARCHAR(64),
+        phone_number  VARCHAR(20) NOT NULL,
+        client_id     UUID,
+        template_name VARCHAR(64),
+        body          TEXT,
+        status        VARCHAR(30) NOT NULL DEFAULT 'pending',
+        error         TEXT,
+        meta          JSONB,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_wa_messages_tenant ON wa_messages (tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_wa_messages_phone ON wa_messages (phone_number);
+      CREATE INDEX IF NOT EXISTS idx_wa_messages_client ON wa_messages (client_id);
+
+      -- Tasks module additions (idempotent).
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE CASCADE;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS period VARCHAR(80);
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS removed_by UUID REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS removed_reason TEXT;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_note TEXT;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_by UUID REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_client ON tasks (client_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks (due_date);
+
+      CREATE TABLE IF NOT EXISTS task_checklist_items (
+        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        task_id    UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        title      VARCHAR(200) NOT NULL,
+        is_done    BOOLEAN NOT NULL DEFAULT FALSE,
+        position   INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_tci_task ON task_checklist_items (task_id);
+
+      CREATE TABLE IF NOT EXISTS task_comments (
+        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        task_id    UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        user_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+        body       TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_tc_task ON task_comments (task_id);
+
+      CREATE TABLE IF NOT EXISTS task_activity (
+        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        task_id    UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        user_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+        action     VARCHAR(60) NOT NULL,
+        details    JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_ta_task ON task_activity (task_id);
     `);
-    console.log('[db] client_services table ensured');
+    console.log('[db] client_services, wa_messages and tasks-module tables ensured');
   } catch (err) {
     console.error('[db] auto-migrate warning:', err.message);
   }

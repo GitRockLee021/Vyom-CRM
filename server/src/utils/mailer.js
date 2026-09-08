@@ -162,3 +162,38 @@ export function sendResetEmail({ email, resetUrl }) {
     html: buildResetEmail({ email, resetUrl }),
   });
 }
+
+// Payment reminder for an outstanding invoice.
+export function buildReminderEmail({ clientName, invoiceNumber, amount, dueDate, companyName }) {
+  const total = Number(amount) || 0;
+  return baseHtml({
+    title: `Reminder: Invoice ${invoiceNumber}`,
+    preheader: `Payment reminder for ${invoiceNumber}.`,
+    body: `
+      <td style="padding:24px 32px 8px 32px;">
+        <h1 style="margin:0 0 12px 0;font-size:20px;color:#1c1b1f;">Payment reminder</h1>
+        <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#757c89;">
+          Dear <strong style="color:#1c1b1f;">${clientName}</strong>,
+        </p>
+        <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#757c89;">
+          This is a gentle reminder that invoice <strong style="color:#1c1b1f;">${invoiceNumber}</strong>
+          for <strong style="color:#1c1b1f;">₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          is due${dueDate ? ` on <strong style="color:#1c1b1f;">${new Date(dueDate).toLocaleDateString('en-IN')}</strong>` : ''}.
+        </p>
+        <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#757c89;">
+          If you have already made this payment, please disregard this message. Otherwise, we would appreciate an early settlement.
+        </p>
+        <p style="margin:0 0 0 0;font-size:14px;line-height:1.6;color:#757c89;">
+          Thank you,<br /><strong style="color:#1c1b1f;">${companyName || 'Vyom CRM'}</strong>
+        </p>
+      </td>`,
+  });
+}
+
+export function sendReminderEmail({ clientEmail, clientName, invoiceNumber, amount, dueDate, companyName }) {
+  return sendMail({
+    to: clientEmail,
+    subject: `Payment reminder for invoice ${invoiceNumber}`,
+    html: buildReminderEmail({ clientName, invoiceNumber, amount, dueDate, companyName }),
+  });
+}

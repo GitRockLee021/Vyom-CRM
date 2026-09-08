@@ -102,7 +102,7 @@ export default function AcceptInvite() {
           </div>
         </div>
 
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-[0_2px_4px_rgba(0,0,0,0.05)]">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-card">
           {checking ? (
             <div className="flex items-center justify-center gap-2 py-6 text-on-surface-variant">
               <span className="material-symbols-outlined animate-spin">progress_activity</span>

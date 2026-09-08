@@ -2,16 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePerm } from '../hooks/usePerm.js';
 import { authHeaders } from '../utils/authHeader.js';
 
-const SERVICE_CATEGORIES = [
-  { value: 'taxation', label: 'Taxation' },
-  { value: 'compliance', label: 'Compliance' },
-  { value: 'advisory', label: 'Advisory' },
-  { value: 'audit', label: 'Audit' },
-  { value: 'registration', label: 'Registration' },
-  { value: 'other', label: 'Other' },
-];
-
-const EMPTY_SERVICE = { code: '', name: '', category: 'taxation', default_fee: '', is_recurring: false, description: '' };
+const EMPTY_SERVICE = { name: '', default_fee: '', is_recurring: false, description: '' };
 
 function ServicesSection() {
   const can = usePerm();
@@ -22,7 +13,6 @@ function ServicesSection() {
 
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('');
   const [notice, setNotice] = useState('');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_SERVICE);
@@ -50,12 +40,6 @@ function ServicesSection() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  const categoryLabel = (v) => SERVICE_CATEGORIES.find((c) => c.value === v)?.label || 'Other';
-
-  const visible = filter
-    ? services.filter((s) => s.category === filter)
-    : services;
-
   function startAdd() {
     setEditing('new');
     setForm(EMPTY_SERVICE);
@@ -64,9 +48,7 @@ function ServicesSection() {
   function startEdit(service) {
     setEditing(service.id);
     setForm({
-      code: service.code || '',
       name: service.name || '',
-      category: service.category || 'other',
       default_fee: service.default_fee != null ? String(service.default_fee) : '',
       is_recurring: Boolean(service.is_recurring),
       description: service.description || '',
@@ -157,27 +139,6 @@ function ServicesSection() {
         <div className="p-container-padding text-on-surface-variant">Loading services…</div>
       ) : (
         <div className="p-container-padding space-y-stack-md">
-          {/* Filter chips */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setFilter('')}
-              className={`px-3 py-1 rounded-full font-label-md text-label-md border transition-colors ${filter === '' ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant text-on-surface hover:bg-surface-container-low'}`}
-            >
-              All
-            </button>
-            {SERVICE_CATEGORIES.map((c) => (
-              <button
-                key={c.value}
-                type="button"
-                onClick={() => setFilter(c.value)}
-                className={`px-3 py-1 rounded-full font-label-md text-label-md border transition-colors ${filter === c.value ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant text-on-surface hover:bg-surface-container-low'}`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-
           {/* Add / Edit form */}
           {editing && (
             <form onSubmit={handleSave} className="border border-outline-variant rounded-lg p-stack-md bg-surface-container-low space-y-stack-md">
@@ -192,17 +153,7 @@ function ServicesSection() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
                 <div>
                   <label className={labelCls}>Service Name <span className="text-error">*</span></label>
-                  <input className={inputCls} type="text" placeholder="e.g. GST Filing" value={form.name} onChange={set('name')} required />
-                </div>
-                <div>
-                  <label className={labelCls}>Code</label>
-                  <input className={`${inputCls} font-data-mono text-data-mono uppercase`} type="text" placeholder="e.g. GST-FILING" value={form.code} onChange={set('code')} />
-                </div>
-                <div>
-                  <label className={labelCls}>Category</label>
-                  <select className={inputCls} value={form.category} onChange={set('category')}>
-                    {SERVICE_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
+                  <input className={inputCls} type="text" placeholder="e.g. Bookkeeping" value={form.name} onChange={set('name')} required />
                 </div>
                 <div>
                   <label className={labelCls}>Default Fee (₹)</label>
@@ -227,9 +178,9 @@ function ServicesSection() {
           )}
 
           {/* Services list */}
-          {visible.length === 0 ? (
+          {services.length === 0 ? (
             <div className="py-10 text-center font-body-md text-body-md text-on-surface-variant">
-              {services.length === 0 ? 'No services yet. Add your first service.' : 'No services in this category.'}
+              No services yet. Add your first service.
             </div>
           ) : (
             <div className="border border-outline-variant rounded-lg overflow-hidden">
@@ -237,21 +188,15 @@ function ServicesSection() {
                 <thead>
                   <tr className="bg-surface-container-low font-label-md text-label-md text-on-surface-variant border-b border-outline-variant">
                     <th className="px-4 py-2.5">Name</th>
-                    <th className="px-4 py-2.5">Code</th>
-                    <th className="px-4 py-2.5">Category</th>
                     <th className="px-4 py-2.5">Default Fee</th>
                     <th className="px-4 py-2.5">Recurring</th>
                     {canManage && <th className="px-4 py-2.5 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant">
-                  {visible.map((s) => (
+                  {services.map((s) => (
                     <tr key={s.id} className="hover:bg-surface-container-low transition-colors">
                       <td className="px-4 py-2.5 font-body-md text-body-md text-on-surface">{s.name}</td>
-                      <td className="px-4 py-2.5 font-data-mono text-data-mono text-on-surface-variant">{s.code || '—'}</td>
-                      <td className="px-4 py-2.5">
-                        <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] font-medium">{categoryLabel(s.category)}</span>
-                      </td>
                       <td className="px-4 py-2.5 font-data-mono text-data-mono text-on-surface">{s.default_fee != null ? `₹${Number(s.default_fee).toLocaleString('en-IN')}` : '—'}</td>
                       <td className="px-4 py-2.5">
                         {s.is_recurring ? (

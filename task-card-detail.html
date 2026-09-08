@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vyom CRM — Task Card Detail (click on card)</title>
+<style>
+  :root {
+    --background: rgba(20,18,26,.5);
+    --surface: #ffffff;
+    --surface-container-low: #f3f0f6;
+    --surface-container-high: #e9e5ec;
+    --outline-variant: #e3dfe8;
+    --outline: #757c89;
+    --primary: #0b6bcb;
+    --primary-fixed: #d7ebff;
+    --on-surface: #1c1b1f;
+    --on-surface-variant: #49454f;
+    --error: #ba1a1a;
+    --error-container: #ffdad6;
+    --on-error-container: #93000a;
+    --green: #166534;
+    --green-bg: #dcfce7;
+    --red: #991b1b;
+    --red-bg: #fee2e2;
+    --gold: #92400e;
+    --gold-bg: #fef3c7;
+    --violet-text: #6b21a8;
+    --violet-bg: #ede9fe;
+    --radius: 0.5rem;
+    --radius-xl: 0.875rem;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Inter", system-ui, -apple-system, sans-serif; background: #f4f2f7; color: var(--on-surface); font-size: 14px; }
+  .demo-bar { position: sticky; top: 0; z-index: 5; background: #1c1b1f; color: #fff; padding: 10px 20px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+  .demo-bar b { color: #7cc0ff; }
+  .switch { display: flex; gap: 8px; }
+  .switch a { color: #c8c4cf; border: 1px solid #3a3742; padding: 4px 12px; border-radius: 6px; text-decoration: none; font-size: 12px; }
+  .switch a.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  .page { max-width: 1000px; margin: 24px auto 60px; padding: 0 20px; }
+  .hint { background: var(--surface-container-low); border: 1px dashed var(--outline); color: var(--on-surface-variant); padding: 12px 16px; border-radius: var(--radius); font-size: 13px; margin-bottom: 18px; }
+  .hint b { color: var(--on-surface); }
+
+  /* ---------- board behind modal ---------- */
+  .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .column { background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); padding: 12px; }
+  .col-head { display: flex; align-items: center; gap: 8px; padding: 4px 6px 12px; font-weight: 700; font-size: 14px; }
+  .col-head .cnt { background: var(--surface-container-high); color: var(--on-surface-variant); border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 600; }
+  .col-head .grow2 { margin-left: auto; font-size: 11px; color: var(--on-surface-variant); }
+  .card { background: var(--surface); border: 1px solid var(--outline-variant); border-radius: var(--radius); padding: 11px 12px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(16,14,23,.06); cursor: pointer; transition: border-color .1s, box-shadow .1s; }
+  .card:hover { border-color: var(--primary); box-shadow: 0 2px 6px rgba(16,14,23,.12); }
+  .card.removed { background: #fff7f7; border-color: color-mix(in srgb, var(--red) 45%, transparent); }
+  .card .ck { width: 15px; height: 15px; border: 2px solid var(--outline-variant); border-radius: 4px; display: inline-block; vertical-align: -2px; margin-right: 8px; }
+  .card .ck.done { background: var(--green); border-color: var(--green); position: relative; }
+  .card .ck.done::after { content: "✓"; color: #fff; font-size: 9px; font-weight: 800; position: absolute; inset: 0; display: grid; place-items: center; }
+  .card .ttl { font-size: 13.5px; font-weight: 600; }
+  .card .sub { font-size: 11.5px; color: var(--on-surface-variant); margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+  .badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+  .b-gst { background: var(--primary-fixed); color: var(--primary); }
+  .b-client { background: var(--surface-container-high); color: var(--on-surface-variant); }
+  .b-removed { background: var(--red-bg); color: var(--red); }
+  .b-progress { background: #dbeafe; color: #1d4ed8; }
+  .meta-line { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11.5px; color: var(--on-surface-variant); font-weight: 600; }
+  .meta-line .due { color: var(--error); }
+  .avatar { width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 9px; font-weight: 700; display: grid; place-items: center; }
+
+  /* ---------- modal ---------- */
+  .overlay { position: fixed; inset: 0; background: var(--background); display: none; align-items: flex-start; justify-content: center; padding: 40px 20px; z-index: 50; }
+  .overlay.open { display: flex; }
+  .sheet { background: var(--surface); border-radius: var(--radius-xl); max-width: 720px; width: 100%; max-height: calc(100vh - 80px); overflow-y: auto; box-shadow: 0 10px 40px rgba(16,14,23,.25); }
+  .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--outline-variant); position: sticky; top: 0; background: var(--surface); z-index: 2; border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
+  .sheet-head h2 { font-size: 18px; line-height: 26px; }
+  .sheet-head .sub { color: var(--on-surface-variant); font-size: 12.5px; margin-top: 6px; }
+  .x { border: none; background: var(--surface-container-low); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; color: var(--on-surface-variant); flex-shrink: 0; }
+  .sheet-body { padding: 20px 24px 24px; }
+
+  .removed-banner { display: flex; gap: 10px; align-items: flex-start; background: var(--red-bg); border: 1px solid color-mix(in srgb, var(--error) 35%, transparent); color: var(--on-error-container); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 18px; font-size: 13px; }
+  .removed-banner .m { width: 20px; height: 20px; font-size: 14px; }
+
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; margin-bottom: 20px; }
+  .field .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--on-surface-variant); font-weight: 700; margin-bottom: 4px; }
+  .field .val { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .full { grid-column: 1 / -1; }
+
+  .section { margin-top: 22px; }
+  .section h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--on-surface-variant); margin-bottom: 10px; }
+  .subtasks { display: flex; flex-direction: column; gap: 7px; }
+  .subtask { display: flex; align-items: center; gap: 9px; font-size: 13px; padding: 7px 10px; background: var(--surface-container-low); border-radius: 8px; }
+  .subtask .ck { width: 15px; height: 15px; border: 2px solid var(--outline); border-radius: 4px; display: inline-block; cursor: pointer; }
+  .subtask .ck.done { background: var(--green); border-color: var(--green); position: relative; }
+  .subtask .ck.done::after { content: "✓"; color: #fff; font-size: 9px; font-weight: 800; position: absolute; inset: 0; display: grid; place-items: center; }
+  .subtask.done-st .txt { color: var(--on-surface-variant); text-decoration: line-through; }
+
+  .activity { display: flex; flex-direction: column; gap: 14px; position: relative; }
+  .activity::before { content: ""; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 2px; background: var(--outline-variant); }
+  .act { display: flex; gap: 12px; position: relative; }
+  .act .dot { width: 18px; height: 18px; border-radius: 50%; background: var(--surface-container-high); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--outline-variant); flex-shrink: 0; margin-top: 1px; display: grid; place-items: center; font-size: 9px; }
+  .act.removed .dot { background: var(--error); border-color: var(--error); }
+  .act.warn .dot { background: var(--gold); border-color: var(--gold); }
+  .act .a-txt { font-size: 13px; }
+  .act .a-time { font-size: 11px; color: var(--on-surface-variant); margin-top: 2px; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--outline-variant); align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; border-radius: var(--radius); padding: 9px 16px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--outline-variant); background: var(--surface); color: var(--on-surface-variant); cursor: pointer; font-family: inherit; }
+  .btn.primary { background: var(--primary); color: #fff; border-color: transparent; }
+  .btn.green { background: var(--green); color: #fff; border-color: transparent; }
+  .btn.ghost-red { color: var(--error); border-color: color-mix(in srgb, var(--error) 40%, transparent); background: #fff; }
+  .grow3 { flex: 1; }
+
+  .footer-note { text-align: center; color: var(--on-surface-variant); font-size: 12px; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <div>Task Card Detail — <b>click a card below to open it</b></div>
+  <div class="switch">
+    <a href="#" onclick="openSheet('normal');return false;">Normal task</a>
+    <a href="#" onclick="openSheet('removed');return false;">⚠ Service removed task</a>
+  </div>
+</div>
+
+<div class="page">
+  <div class="hint">
+    <b>Click either card below</b> (or the two buttons in the bar above) to see the detail panel that opens when a board card is clicked.
+    Two variants shown: a <b>normal task</b> and a <b>"Service removed" task</b> that needs review.
+  </div>
+
+  <!-- mini board to click from -->
+  <div class="board">
+    <div class="column">
+      <div class="col-head">⬜ To Do <span class="cnt">2</span></div>
+      <div class="card" onclick="openSheet('removed')">
+        <div class="ttl"><span class="ck"></span>Reconcile input credit — GSTR-2B</div>
+        <div class="sub"><span class="badge b-gst">GST-ADJ</span> <span class="badge b-client">Krishna &amp; Co</span> <span class="badge b-removed">⚠ Service removed</span></div>
+        <div class="meta-line"><span>Aug 2026</span><span><span class="avatar" style="background:#0b6bcb;">RA</span></span></div>
+      </div>
+      <div class="card" onclick="openSheet('normal')">
+        <div class="ttl"><span class="ck"></span>File monthly GSTR-3B return</div>
+        <div class="sub"><span class="badge b-gst">GST</span> <span class="badge b-client">Rathi Traders</span></div>
+        <div class="meta-line"><span class="due">Due 20 Sep</span><span><span class="avatar" style="background:#7c3aed;">PR</span></span></div>
+      </div>
+    </div>
+    <div class="column">
+      <div class="col-head">🔄 In Progress <span class="cnt">1</span></div>
+      <div class="card" onclick="openSheet('normal')">
+        <div class="ttl"><span class="ck"></span>Statutory audit — financials</div>
+        <div class="sub"><span class="badge b-gst">AUDIT</span> <span class="badge b-client">Somya Exports</span> <span class="badge b-progress">In Progress</span></div>
+        <div class="meta-line"><span>FY 25-26</span><span><span class="avatar" style="background:#0b6bcb;">RA</span></span></div>
+      </div>
+    </div>
+    <div class="column">
+      <div class="col-head">✓ Completed <span class="cnt">1</span></div>
+      <div class="card" onclick="openSheet('normal')">
+        <div class="ttl"><span class="ck done"></span>File GSTR-1 (Aug) with HSN</div>
+        <div class="sub"><span class="badge b-gst">GST</span> <span class="badge b-client">Rathi Traders</span></div>
+        <div class="meta-line"><span>11 Sep</span><span><span class="avatar" style="background:#7c3aed;">PR</span></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ NORMAL TASK SHEET ============ -->
+<div class="overlay" id="normal">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div>
+        <h2>File monthly GSTR-3B return</h2>
+        <div class="sub">
+          <span class="badge b-gst" style="margin-right:4px;">GST</span>
+          <span class="badge b-client">Rathi Traders</span> · Client task · Period Sep 2026
+        </div>
+      </div>
+      <button class="x" onclick="closeSheet()">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="detail-grid">
+        <div class="field"><div class="lbl">Status</div><div class="val"><span class="badge b-progress" style="font-size:11px;padding:3px 10px;">In Progress</span></div></div>
+        <div class="field"><div class="lbl">Due date</div><div class="val" style="color:var(--error);">20 Sep 2026</div></div>
+        <div class="field"><div class="lbl">Assignee</div><div class="val"><span class="avatar" style="background:#7c3aed;width:22px;height:22px;font-size:10px;">PR</span> Priya · Senior Associate</div></div>
+        <div class="field"><div class="lbl">Service</div><div class="val">GST Filing (Monthly)</div></div>
+        <div class="field full"><div class="lbl">Notes</div><div class="val" style="font-weight:500;color:var(--on-surface-variant);">Confirm HSN summary from purchase register before filing. Follow up on the junior's trial balance.</div></div>
+      </div>
+
+      <div class="section">
+        <h3>Sub-tasks</h3>
+        <div class="subtasks">
+          <div class="subtask"><span class="ck done"></span><span class="txt">Reconcile GSTR-2B purchases</span></div>
+          <div class="subtask"><span class="ck done"></span><span class="txt">Draft return from books</span></div>
+          <div class="subtask"><span class="ck"></span><span class="txt">Client review &amp; approval</span></div>
+          <div class="subtask"><span class="ck"></span><span class="txt">Pay &amp; file on portal</span></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Activity</h3>
+        <div class="activity">
+          <div class="act"><div class="dot">✓</div><div><div class="a-txt">Priya moved task to <b>In Progress</b></div><div class="a-time">Today · 11:24</div></div></div>
+          <div class="act"><div class="dot">↻</div><div><div class="a-txt">September occurrence auto-created</div><div class="a-time">1 Sep · recurring setup</div></div></div>
+          <div class="act"><div class="dot">＋</div><div><div class="a-txt">Raman created task from <b>GST Filing</b> service</div><div class="a-time">1 Sep · on client onboarding</div></div></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary">↻ Auto-generate next month</button>
+        <button class="btn green">✓ Mark Completed</button>
+        <div class="grow3"></div>
+        <button class="btn">Assign to…</button>
+        <button class="btn">Edit</button>
+      </div>
+      <div class="footer-note">Drag it to Completed on the board to do the same thing.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SERVICE REMOVED SHEET ============ -->
+<div class="overlay" id="removed">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div>
+        <h2>Reconcile input credit — GSTR-2B</h2>
+        <div class="sub">
+          <span class="badge b-gst" style="margin-right:4px;">GST</span>
+          <span class="badge b-client">Krishna &amp; Co</span> · Client task · Period Aug 2026
+        </div>
+      </div>
+      <button class="x" onclick="closeSheet()">✕</button>
+    </div>
+    <div class="sheet-body">
+
+      <div class="removed-banner">
+        <div class="m">⚠️</div>
+        <div>
+          <b>This service was removed from the client.</b> This task is paused and stays in To Do until you decide what to do. Review the log below, then either mark it completed (work was finished) or archive it (no longer relevant).
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div class="field"><div class="lbl">Status</div><div class="val"><span class="badge b-removed" style="font-size:11px;padding:3px 10px;">⚠ Service removed</span></div></div>
+        <div class="field"><div class="lbl">Due date</div><div class="val" style="color:var(--error);">18 Sep 2026</div></div>
+        <div class="field"><div class="lbl">Assignee</div><div class="val"><span class="avatar" style="background:#0b6bcb;width:22px;height:22px;font-size:10px;">RA</span> Raman · Partner</div></div>
+        <div class="field"><div class="lbl">Service</div><div class="val" style="color:var(--error);text-decoration:line-through;">GST Filing — removed</div></div>
+        <div class="field full"><div class="lbl">Notes</div><div class="val" style="font-weight:500;color:var(--on-surface-variant);">Part-way reconciliation — purchases up to 10 Aug entered in books.</div></div>
+      </div>
+
+      <div class="section">
+        <h3>Sub-tasks</h3>
+        <div class="subtasks">
+          <div class="subtask"><span class="ck done"></span><span class="txt">Reconcile GSTR-2B purchases</span></div>
+          <div class="subtask"><span class="ck"></span><span class="txt">Draft return from books</span></div>
+        </div>
+      </div>
+
+      <div class="section" style="border:1px solid var(--outline-variant);border-radius:var(--radius);padding:14px;background:var(--surface-container-lowest);">
+        <h3 style="margin-bottom:12px;color:var(--red);">Service removal log</h3>
+        <div class="activity">
+          <div class="act removed"><div class="dot"></div><div><div class="a-txt"><b>GST Filing</b> service removed by <b>Raman</b></div><div class="a-time">Today · 09:15</div></div></div>
+          <div class="act warn"><div class="dot"></div><div><div class="a-txt">This task was automatically flagged for <b>review</b> — it will not be regenerated</div><div class="a-time">Today · 09:15 · system</div></div></div>
+          <div class="act"><div class="dot">＋</div><div><div class="a-txt">Raman created task from <b>GST Filing</b> service</div><div class="a-time">1 Aug · on client onboarding</div></div></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn green">✓ Mark Completed</button>
+        <button class="btn">🗄 Archive</button>
+        <div class="grow3"></div>
+        <button class="btn">Assign to…</button>
+        <button class="btn">Edit</button>
+      </div>
+      <div class="footer-note" style="color:var(--error);">This card is not draggable to Completed — complete or archive it from here instead.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openSheet(id) {
+    document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open'));
+    document.getElementById(id).classList.add('open');
+  }
+  function closeSheet() {
+    document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open'));
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
+</script>
+</body>
+</html>

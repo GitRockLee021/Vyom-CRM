@@ -61,10 +61,15 @@ async function provision() {
     });
   }
 
+  const service = await api('/api/services', {
+    method: 'POST',
+    token: admin.token,
+    body: { name: 'E2E Service' },
+  });
   const client = await api('/api/clients', {
     method: 'POST',
     token: admin.token,
-    body: { name: 'E2E Client', client_type: 'business' },
+    body: { name: 'E2E Client', client_type: 'business', service_ids: [service.id] },
   });
   const invoice = await api('/api/invoices', {
     method: 'POST',

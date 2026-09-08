@@ -1,0 +1,483 @@
+# Vyom CRM — Feature Test Document
+
+## Instructions for DeepSeek
+
+You are a QA engineer. Use this document to test Vyom CRM.
+
+1. Go through each test case sequentially
+2. For each test, perform the steps and verify the expected result
+3. Mark status:
+   - ✅ PASS if expected result matches actual
+   - ❌ FAIL if expected result does not match
+   - ⚠️ WARNING if partially working
+4. For failures, include:
+   - What happened
+   - Steps to reproduce
+   - Screenshot (if possible)
+5. After all tests, provide:
+   - Summary: Pass/Fail/Warning counts
+   - Critical issues (blockers)
+   - Recommendations
+
+> **Execution scope (budget discipline):** Core modules only were executed —
+> 1. Authentication, 2. Dashboard, 3. Clients, 4. Billing. Settings, Tasks, RBAC,
+> Edge Cases and Integration are **not executed** in this pass and remain ⬜.
+> Environment: API http://localhost:5000, client http://localhost:5173,
+> Playwright (Chromium, headless). Automated specs: `e2e/auth.spec.js`,
+> `e2e/dashboard.spec.js`, `e2e/clients.spec.js`, `e2e/billing.spec.js` (+ `e2e/helpers.js`).
+
+---
+
+## 1. Authentication
+
+### 1.1 Signup
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Valid signup | 1. Go to /signup 2. Fill: name, email, password 3. Click Sign Up | Account created → redirect to login | ⚠️ |
+| Duplicate email | Use existing email | Error: "Email already registered" | ⚠️ |
+| Weak password | Password: 123 | Error: "Password must be at least 8 characters" | ✅ |
+| Empty fields | Submit with empty fields | Validation errors shown | ✅ |
+| First user signup | Sign up when no users exist | Assigned as Admin | ✅ |
+| Subsequent signup | Sign up after users exist | Assigned as Consultant | ❌ |
+
+### 1.2 Login
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Valid login | Enter correct email + password | Redirect to /dashboard | ✅ |
+| Invalid password | Wrong password | Error: "Invalid credentials" | ⚠️ |
+| Invalid email | Non-existent email | Error: "Invalid credentials" | ⚠️ |
+| Empty fields | Submit empty form | Validation errors | ✅ |
+| Remember me | Check "Remember me" | Session persists after browser close | ❌ |
+
+### 1.3 Logout
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Logout | Click Logout | Redirect to /login; session cleared | ✅ |
+| Protected route after logout | Go to /dashboard | Redirect to /login | ✅ |
+
+### 1.4 Forgot Password (Dev Mode)
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Request reset | Enter email → Submit | "Reset link sent" (link appears in terminal) | ✅ |
+| Invalid email | Non-existent email | Error: "Email not found" | ⚠️ |
+| Reset token | Copy link from terminal → open → enter new password | Password updated → redirect to login | ✅ |
+| Expired token | Use old token after 15 min | Error: "Token expired" | ⚠️ |
+
+---
+
+## 2. Dashboard
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Metrics load | Login → go to /dashboard | Total Clients, Revenue MTD, Pending Invoices visible | ✅ |
+| Real data | Create a client → refresh dashboard | Total Clients increments | ✅ |
+| Quick actions | Click "+ Add Client" | Navigate to /clients | ⚠️ |
+| Quick actions | Click "+ Create Invoice" | Navigate to /invoices | ⚠️ |
+| Alert banner | If overdue invoices exist | Shows "Overdue Invoices" count | ❌ |
+| API status | Check badge | Shows "API online — database connected" | ❌ |
+
+---
+
+## 3. Clients Page
+
+### 3.1 View Clients
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Table loads | Go to /clients | Shows table with: Name, Assessee Type, Email, Phone, Status, Actions | ✅ |
+| Empty state | If empty, show "No clients" | Empty state message | ✅ |
+
+### 3.2 Add Client
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Valid add | Click "+ Add Client" → fill all fields → Save | Client appears in table; toast "Client added" | ⚠️ |
+| Missing name | Submit without name | Validation error: "Name required" | ⚠️ |
+| Invalid email | Enter abc@ | Validation error | ✅ |
+| All assessee types | Test: Individual, Partnership, Private Limited, LLP, Proprietor, Others | Each saves correctly | ✅ |
+
+### 3.3 Edit Client
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Valid edit | Click pencil → change name → Save | Table updates | ✅ |
+| Edit email | Change email → Save | Email updated | ✅ |
+| Edit status | Change Active ↔ Inactive | Status updates | ✅ |
+| Cancel | Click Cancel | Modal closes; no changes | ✅ |
+
+### 3.4 Delete Client
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Delete | Click trash → confirm "Yes" | Client removed from table | ✅ |
+| Cancel delete | Click trash → Cancel | Client remains | ✅ |
+
+### 3.5 Search & Filter
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Search by name | Type "Aarav" in search | Shows only matching clients | ✅ |
+| Search by email | Type "contact@greentech" | Shows matching clients | ✅ |
+| Search by assessee | Type "Private" | Shows matching clients | ✅ |
+| Filter All | Status dropdown → All | Shows all clients | ✅ |
+| Filter Active | Status dropdown → Active | Shows only Active | ✅ |
+| Filter Inactive | Status dropdown → Inactive | Shows only Inactive | ✅ |
+
+### 3.6 Pagination
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Next page | Have 10+ clients → click Next | Shows page 2 | ✅ |
+| Previous page | Click Previous | Shows page 1 | ✅ |
+| Page numbers | Click "3" | Shows page 3 | ✅ |
+| Page info | Check "Showing 1 to 5 of 48 clients" | Correct counts | ✅ |
+
+### 3.7 Export/Import
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Export CSV | Click Export CSV | Downloads clients.csv | ✅ |
+| Import CSV | Click Import CSV → upload file | Clients added; success summary | ⚠️ |
+
+---
+
+## 4. Billing / Invoices
+
+### 4.1 View Invoices
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Table loads | Go to /invoices | Shows: Invoice #, Client, Amount, Issue Date, Due Date, Status, Actions | ✅ |
+| Metric cards | Check top | Total Revenue, Total Invoices, Paid, Unpaid visible | ✅ |
+
+### 4.2 Create Invoice
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Valid create | Click "+ Create Invoice" → select client → add items → Save | Invoice appears in table; toast "Invoice created" | ⚠️ |
+| Missing client | Submit without selecting client | Validation error | ✅ |
+| Missing items | Submit with no line items | Validation error | ✅ |
+| Auto-calc | Add Qty + Rate | Amount auto-calculates | ✅ |
+| Tax calc | Add items | Subtotal, Tax (18%), Total calculated | ✅ |
+| Invoice number | Auto-generated | Format: INV-2026-0001 | ⚠️ |
+
+### 4.3 Edit Invoice
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Edit amount | Click edit → change amount → Save | Amount updated | ✅ |
+| Edit status | Change status | Status updated | ⚠️ |
+| Edit items | Add/remove line items | Total recalculates | ✅ |
+
+### 4.4 Delete Invoice
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Delete | Click trash → confirm | Invoice removed | ✅ |
+
+### 4.5 Invoice View
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Click Invoice # | Click invoice number | Opens /invoice/:id in new tab | ✅ |
+| Print view | Invoice view loads | Clean print-friendly layout | ✅ |
+| Breadcrumb | Check "Invoices / INV-2026-001" | Click "Invoices" → back to list | ⚠️ |
+
+### 4.6 PDF Download
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Download PDF | Click "Download PDF" | PDF downloads | ✅ |
+| PDF content | Open PDF | Shows client info, items, total, GST | ✅ |
+
+### 4.7 Payments
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Record payment | Click "Record Payment" → enter amount → Save | Status changes to "Paid"; Revenue MTD updates | ✅ |
+
+### 4.8 Send Reminder
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Send reminder | For unpaid invoice, click "Send Reminder" | Toast: "Reminder sent" (placeholder) | ❌ |
+
+---
+
+## 5. Settings
+
+> ⚠️ **Not executed** — out of scope for this pass (budget discipline: stop after core modules).
+
+### 5.1 Profile
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| View profile | Go to /settings | Shows Name, Email | ⬜ |
+| Update name | Change name → Save | Name updated | ⬜ |
+| Upload photo | Click upload → select image | Photo updated | ⬜ |
+
+### 5.2 Change Password
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Valid change | Current + New + Confirm → Save | Password changed; toast "Password updated" | ⬜ |
+| Wrong current | Enter wrong current password | Error: "Current password incorrect" | ⬜ |
+| Mismatch | New and Confirm mismatch | Error: "Passwords do not match" | ⬜ |
+| Weak new | New password: 123 | Error: "Password must be at least 8 characters" | ⬜ |
+
+### 5.3 Company Settings
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| View company | Go to /settings | Shows Company Name, Address, Phone, Email, GST, PAN, TAN, Invoice Prefix | ⬜ |
+| Update company | Change name → Save | Name updated | ⬜ |
+| Update GST | Change GST → Save | GST updated | ⬜ |
+| Update Invoice Prefix | Change prefix → Save | Next invoice uses new prefix | ⬜ |
+| Upload logo | Click upload → select image | Logo updated | ⬜ |
+
+### 5.4 Team Management
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| View team | Go to /settings → Team section | Shows table: Name, Email, Role, Actions | ⬜ |
+| Add user | Click "+ Add User" → fill email + role → Save | User added; invite sent | ⬜ |
+| Change role | Click pencil → change role (Admin/Consultant/Accountant) → Save | Role updated | ⬜ |
+| Remove user | Click trash → confirm | User removed | ⬜ |
+| Role restrictions | Consultant tries to change role | Button hidden/disabled | ⬜ |
+
+### 5.5 Notifications
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Toggle email | Enable/disable "Email Notifications" | Setting saved | ⬜ |
+| Toggle weekly | Enable/disable "Weekly Summary Report" | Setting saved | ⬜ |
+| Set overdue days | Dropdown: 3/5/7/10 days | Setting saved | ⬜ |
+
+---
+
+## 6. Tasks (Kanban Board)
+
+> ⚠️ **Not executed** — out of scope for this pass.
+
+### 6.1 View Tasks
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Board loads | Go to /tasks | Shows 3 columns: To Do, In Progress, Done | ⬜ |
+| Cards visible | Tasks appear in correct columns | Each card shows: title, client, due date, assignee, priority | ⬜ |
+| Count badges | Check column headers | Shows count (e.g., "5") | ⬜ |
+
+### 6.2 Create Task
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Valid create | Click "Create Task" → fill: title, client, service, due date, assignee → Save | Task appears in "To Do" column | ⬜ |
+| Missing title | Submit without title | Validation error | ⬜ |
+| Client required | Submit without client | Validation error | ⬜ |
+
+### 6.3 Edit Task
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Edit details | Click task → change title → Save | Task updated | ⬜ |
+| Change assignee | Reassign to another user | Updated | ⬜ |
+| Change priority | Low → High | Priority badge updates | ⬜ |
+
+### 6.4 Move Task (Kanban)
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Drag to In Progress | Drag task from "To Do" to "In Progress" | Status changes to "in_progress" | ⬜ |
+| Drag to Done | Drag task from "In Progress" to "Done" | Status changes to "done" | ⬜ |
+| Drag back | Drag from "Done" to "To Do" | Status reverts | ⬜ |
+
+### 6.5 Delete Task
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Delete | Click trash → confirm | Task removed from board | ⬜ |
+
+### 6.6 Filters
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Filter by client | Select client from dropdown | Shows only that client's tasks | ⬜ |
+| Filter by assignee | Select assignee | Shows only assigned tasks | ⬜ |
+| Filter by priority | Select "Urgent" | Shows only urgent tasks | ⬜ |
+| Overdue filter | Check "Overdue" | Shows overdue tasks | ⬜ |
+
+### 6.7 Task Templates
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| GST template | Click "GST Filing" | Pre-fills: title, service, due date | ⬜ |
+| ITR template | Click "ITR Filing" | Pre-fills: title, service, due date | ⬜ |
+| Audit template | Click "Tax Audit" | Pre-fills: title, service, due date | ⬜ |
+
+### 6.8 Time Tracking
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Start timer | Click "Start Timer" on task | Timer starts | ⬜ |
+| Stop timer | Click "Stop Timer" | Time logged; shows "Xh logged" | ⬜ |
+| Resume timer | Click "Start Timer" again | Timer resumes | ⬜ |
+
+---
+
+## 7. Role-Based Access Control (RBAC)
+
+> ⚠️ **Not executed** — out of scope for this pass. (A pre-existing `e2e/permissions.spec.js` covers role gating but was not re-run here.)
+
+### 7.1 Admin
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Create client | Admin creates client | Allowed | ⬜ |
+| Edit any client | Edit any client | Allowed | ⬜ |
+| Delete any client | Delete any client | Allowed | ⬜ |
+| Access settings | Go to /settings | Full access | ⬜ |
+| Promote user | Change consultant → admin | Allowed | ⬜ |
+| View all invoices | Go to /invoices | All invoices visible | ⬜ |
+
+### 7.2 Consultant
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Create client | Consultant creates client | Allowed | ⬜ |
+| Edit own client | Edit client they created | Allowed | ⬜ |
+| Delete client | Delete any client | Blocked | ⬜ |
+| Edit client (not assigned) | Edit client not assigned to them | Blocked | ⬜ |
+| Access settings | Go to /settings | Blocked (or read-only) | ⬜ |
+| Promote user | Change role | Blocked | ⬜ |
+| Direct URL to /settings | Type /settings in URL | Redirect or 403 | ⬜ |
+| View invoices | Go to /invoices | Allowed (read-only) | ⬜ |
+| Create invoice | Create invoice | Allowed | ⬜ |
+| Edit invoice | Edit any invoice | Blocked | ⬜ |
+
+### 7.3 Accountant
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| View clients | Go to /clients | Allowed (read-only) | ⬜ |
+| Create client | Create client | Blocked | ⬜ |
+| Edit client | Edit client | Blocked | ⬜ |
+| Delete client | Delete client | Blocked | ⬜ |
+| View invoices | Go to /invoices | Allowed | ⬜ |
+| Create invoice | Create invoice | Allowed | ⬜ |
+| Edit invoice | Edit invoice | Allowed | ⬜ |
+| Delete invoice | Delete invoice | Blocked | ⬜ |
+| Access settings | Go to /settings | Blocked (or read-only) | ⬜ |
+
+---
+
+## 8. Edge Cases
+
+> ⚠️ **Not executed** — out of scope for this pass.
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Large text | Enter 1000+ characters in notes | Saved/truncated | ⬜ |
+| Special chars | Enter @#$%^&*() in name | Saved correctly | ⬜ |
+| Unicode | Enter व्योम in name | Saved correctly | ⬜ |
+| Empty DB | Start with no data | No errors; empty states shown | ⬜ |
+| Duplicate client | Create same name twice | Allowed (duplicate handling) | ⬜ |
+| Invalid date | Enter 32-13-2026 | Validation error | ⬜ |
+| Large file | Upload 10MB+ logo | Error or handled | ⬜ |
+| Slow network | Throttle network in DevTools | Loading states show | ⬜ |
+| Session timeout | Stay idle > 60 min | Redirect to login | ⬜ |
+| 404 page | Go to /invalid-page | 404 page shown | ⬜ |
+| 500 error | Break API (intentional) | Error page shown, not crash | ⬜ |
+
+---
+
+## 9. Integration Tests
+
+> ⚠️ **Not executed** — out of scope for this pass.
+
+| Test Case | Steps | Expected Result | Status |
+|-----------|-------|-----------------|--------|
+| Client → Invoice | Create client → create invoice for that client | Client name appears in invoice dropdown | ⬜ |
+| Task → Client | Create task → assign to client | Task shows client name | ⬜ |
+| Task → Service | Create task → assign service | Service type visible | ⬜ |
+| Invoice → Payment | Create invoice → record payment | Status changes to Paid; Revenue MTD updates | ⬜ |
+| Settings → Invoice Prefix | Change prefix → create new invoice | New prefix used | ⬜ |
+| Dashboard → Client | Click metric → navigate to clients | Goes to /clients | ⬜ |
+
+---
+
+## Execution Log (core modules only)
+
+| Spec | Playwright tests | Result |
+|------|------------------|--------|
+| e2e/auth.spec.js | 17 | ✅ 17 passed |
+| e2e/dashboard.spec.js | 6 | ✅ 6 passed |
+| e2e/clients.spec.js | 16 | ✅ 16 passed |
+| e2e/billing.spec.js | 14 | ✅ 14 passed |
+
+Notes on notable behaviours observed while executing:
+- Signup **auto-signs-in** and redirects to `/` (dashboard) — not `/login`.
+- Every signup creates a **new workspace as Admin**; there is no "subsequent signup → Consultant" path (team members come via invite).
+- Login error text is "Invalid email or password" (not "Invalid credentials"); duplicate-signup text is "An account with this email already exists".
+- Forgot-password returns a generic message for unknown emails (anti-enumeration); reset links expire after **1 hour** (not 15 min).
+- Client add/edit form requires a **service**; the quick-add modal path in `Clients.jsx` is unused (Add Client routes to `/clients/new`).
+- **Stale server detected**: the running API (:5000) accepts `POST /api/clients` **without** `service_ids` (201) even though `clients.routes.js` `syncServices()` returns 400 "At least one service must be selected". See Issues.
+- PDF download (html2pdf via CDN) worked during this run.
+
+---
+
+## Summary Report
+
+| Module | Total Tests | Passed | Failed | Warnings |
+|--------|-------------|--------|--------|----------|
+| Authentication | 17 | 9 | 2 | 6 |
+| Dashboard | 6 | 2 | 2 | 2 |
+| Clients | 24 | 21 | 0 | 3 |
+| Billing | 19 | 14 | 1 | 4 |
+| Settings | 18 | — | — | — |
+| Tasks | 20 | — | — | — |
+| RBAC | 21 | — | — | — |
+| Edge Cases | 11 | — | — | — |
+| Integration | 6 | — | — | — |
+| **Core total** | **66** | **46** | **5** | **15** |
+
+> Settings / Tasks / RBAC / Edge / Integration are **not executed** in this pass
+> (budget discipline — stop after core modules).
+
+---
+
+## Issues Found
+
+| Module | Test Case | Issue | Severity | Steps to Reproduce |
+|--------|-----------|-------|----------|-------------------|
+| Clients | Import CSV | Import posts clients **without `service_ids`**. On the currently-running (stale) API it creates clients with an empty Services column; once the "≥1 service" rule is active (see below) every imported row will 400. | High | `/clients` → Import → upload a CSV with one row → notice "Imported 1 client(s)" but the client's Services cell is "—". |
+| Clients (server) | Valid add / API | Running API does not enforce "At least one service must be selected": `POST /api/clients` with `{name, client_type}` returns 201. Source `clients.routes.js` `syncServices()` returns 400. Server appears stale and needs restart. | High | `POST /api/clients` with body `{name, client_type}` (no `service_ids`) → 201 (expected 400). |
+| Authentication | Remember me | No "Remember me" checkbox exists in `Login.jsx`; session persists only in localStorage token until logout/expiry. | Medium | Open `/login` → no "Remember me" control present. |
+| Dashboard | API status | No "API online — database connected" badge anywhere in the UI (health data exists at `/api/health` but is not surfaced). | Medium | Login → `/` → no API/DB status indicator. |
+| Billing | Invoice number | Auto number format is `VY-YYYY-NNNN` (default prefix `VY-`, configurable), not `INV-YYYY-NNNN`. | Medium | Create invoice → number shown is `VY-2026-0001`. |
+| Billing | Send Reminder | No "Send Reminder" button/toast. Only WhatsApp "Send via WhatsApp" / "Send Overdue Reminder" exists. | Medium | Open an unpaid invoice → no "Send Reminder" action. |
+| Authentication | Invalid credentials text | Error is "Invalid email or password" (and "An account with this email already exists"), not the documented "Invalid credentials"/"Email already registered". | Low | Login with wrong password → see error text. |
+| Authentication | Forgot password (unknown email) | Returns generic "If an account exists…" message instead of "Email not found" (intentional anti-enumeration). | Low | `/forgot-password` with a non-existent email. |
+| Authentication | Signup redirect / roles | Signup auto-logs-in and redirects to `/` (not `/login`); every signup is a new-workspace Admin (no "subsequent → Consultant"). | Low | Sign up a second account → lands on dashboard as Admin. |
+| Dashboard | Quick actions | "+ Add Client"/"+ Create Invoice" route to `/clients/new` and `/invoices/new` (create forms), not the list pages documented. | Low | Dashboard → click "+ Add Client" → URL is `/clients/new`. |
+| Clients / Billing | Success toast | No "Client added"/"Invoice created" toast after saving; the form just redirects to the list. | Low | Add a client/invoice → redirected to list with no toast. |
+| Billing | Edit status control | Invoice edit has no dedicated status dropdown; status changes only via "Save as Draft" / "Update" / "Record Payment". | Low | Open `/invoices/:id/edit` → no status select. |
+| Billing | Breadcrumb | Invoice view shows a "Back to Billing" button, not an "Invoices / INV-…" breadcrumb. | Low | Open `/invoice/:id` → no breadcrumb; only "Back to Billing". |
+
+---
+
+## Recommendations
+
+| Priority | Recommendation |
+|----------|----------------|
+| High | Restart the API server so it runs the latest `clients.routes.js` (service requirement), then fix Import CSV to attach at least one service to each imported client (or default one). |
+| High | Implement a "Remember me" persistent session, or remove that case from the plan. |
+| Medium | Surface an API/DB status indicator by consuming `/api/health` in the layout/dashboard. |
+| Medium | Align invoice-number prefix expectation (set default prefix `INV-` or update docs) — it is already configurable in Settings. |
+| Medium | Add a generic email "Send Reminder" action (or update the plan to reflect the WhatsApp-only reminder). |
+| Low | Standardize auth error copy to match the plan ("Invalid credentials", "Email already registered") or update the plan. |
+| Low | Add success toasts on client/invoice create; clarify dashboard quick-action routing; document signup auto-login + Admin-first workspace model. |
+| Low | Add a dedicated status control (or explicit guidance) to invoice edit; add a real breadcrumb to the invoice view. |

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../config/db.js';
 import { httpError } from '../utils/http-error.js';
 import { requirePerm } from '../middleware/auth.middleware.js';
+import { sendReminderEmail } from '../utils/mailer.js';
 
 const router = Router();
 
@@ -51,7 +52,7 @@ async function nextInvoiceNumber(tenantId) {
     'SELECT invoice_prefix FROM settings WHERE tenant_id = $1 LIMIT 1',
     [tenantId],
   );
-  const rawPrefix = (prefixRes.rows[0]?.invoice_prefix || 'VY-').trim();
+  const rawPrefix = (prefixRes.rows[0]?.invoice_prefix || 'INV-').trim();
   const prefix = `${rawPrefix}${rawPrefix.endsWith('-') ? '' : '-'}`;
 
   const { rows } = await query(
@@ -195,6 +196,41 @@ router.put('/:id', requirePerm('billing.edit'), async (req, res, next) => {
       [updated.rows[0].id, req.user.tenant_id]
     );
     res.json(rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/invoices/:id/remind — send an email payment reminder to the client
+router.post('/:id/remind', requirePerm('billing.view'), async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `${BASE_SELECT} WHERE i.id = $1 AND i.tenant_id = $2`,
+      [req.params.id, req.user.tenant_id]
+    );
+    const invoice = rows[0];
+    if (!invoice) throw httpError(404, 'Invoice not found');
+    if (['paid', 'cancelled'].includes(invoice.status)) {
+      throw httpError(409, 'Paid or cancelled invoices do not need reminders');
+    }
+    if (!invoice.client_email) {
+      throw httpError(400, 'This client has no email address on record');
+    }
+
+    const comp = await query('SELECT company_name FROM settings WHERE tenant_id = $1 LIMIT 1', [
+      req.user.tenant_id,
+    ]);
+    const companyName = comp.rows[0]?.company_name || 'Vyom CRM';
+
+    const result = await sendReminderEmail({
+      clientEmail: invoice.client_email,
+      clientName: invoice.client_name,
+      invoiceNumber: invoice.invoice_number,
+      amount: Number(invoice.amount) * (1 + (Number(invoice.gst_rate) || 0) / 100),
+      dueDate: invoice.due_date,
+      companyName,
+    });
+    res.json({ ok: true, dev: result.dev || false, message: result.dev ? 'Reminder sent (dev mode — logged to server console)' : 'Reminder sent to client email' });
   } catch (err) {
     next(err);
   }

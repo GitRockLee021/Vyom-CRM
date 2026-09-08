@@ -96,7 +96,7 @@ export default function Dashboard() {
         {/* Welcome Section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h2 className="font-headline-md text-headline-md text-on-background">{greeting}, {firstName}.</h2>
+            <h2 className="font-headline-lg text-headline-lg text-on-background">{greeting}, {firstName}.</h2>
             <p className="font-body-md text-body-md text-on-surface-variant mt-1">
               Here is the financial overview for {periodLabel}.
             </p>
@@ -120,10 +120,10 @@ export default function Dashboard() {
         {/* KPI Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
           {kpis.map((kpi) => (
-            <div key={kpi.key} className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md relative overflow-hidden">
+            <div key={kpi.key} className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-md shadow-card relative overflow-hidden">
               <div className="flex justify-between items-start mb-3">
                 <span className="font-label-md text-label-md text-on-surface-variant uppercase">{kpi.label}</span>
-                <div className={`w-10 h-10 rounded flex items-center justify-center ${iconAccent(kpi)}`}>
+                <div className={`w-10 h-10 rounded-[10px] flex items-center justify-center ${iconAccent(kpi)}`}>
                   <span className={`material-symbols-outlined text-[20px] ${kpi.iconCls}`}>{kpi.icon}</span>
                 </div>
               </div>

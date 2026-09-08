@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vyom CRM — Add Client (full) | design mockup</title>
+<style>
+  :root {
+    --bg: #f4f2f7;
+    --surface: #ffffff;
+    --surface-low: #f7f3fa;
+    --surface-high: #ececf0;
+    --surface-variant: #dfd7e0;
+    --border: #e4e0e9;
+    --on-surface: #1c1b1f;
+    --on-surface-variant: #49454f;
+    --muted: #757c89;
+    --primary: #0b6bcb;
+    --primary-dark: #0956a6;
+    --primary-container: #d7ebff;
+    --primary-container-soft: #eaf4ff;
+    --green: #166534;
+    --green-bg: #dcfce7;
+    --red: #991b1b;
+    --red-bg: #fee2e2;
+    --gold: #92400e;
+    --gold-bg: #fef3c7;
+    --blue-bg: #dbeafe;
+    --blue-text: #1d4ed8;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.04);
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg); color: var(--on-surface); font-size: 14px;
+    display: flex; height: 100vh; overflow: hidden;
+  }
+
+  .sidebar {
+    width: 256px; background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 16px 16px 24px; flex-shrink: 0;
+  }
+  .brand { display: flex; gap: 12px; align-items: center; padding: 8px; margin-bottom: 24px; }
+  .brand-logo { width: 40px; height: 40px; border-radius: 8px; background: var(--primary-container); display: flex; align-items: center; justify-content: center; color: var(--primary); font-weight: 800; font-size: 18px; }
+  .brand-name { font-size: 17px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+  .brand-sub { font-size: 10px; letter-spacing: 1.5px; color: var(--muted); }
+  .nav { display: flex; flex-direction: column; gap: 4px; }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: var(--on-surface-variant); cursor: pointer; user-select: none; }
+  .nav-item:hover { background: var(--surface-low); color: var(--on-surface); }
+  .nav-item.active { background: var(--primary-container-soft); color: var(--primary); font-weight: 700; box-shadow: inset 3px 0 0 var(--primary); }
+  .nav-item .icon { width: 20px; height: 20px; display: grid; place-items: center; }
+  .nav-footer { margin-top: auto; border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 4px; }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    height: 64px; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px; padding: 0 24px;
+  }
+  .search { flex: 1; max-width: 420px; display: flex; align-items: center; gap: 8px; background: var(--surface-low); border: 1px solid transparent; border-radius: 999px; padding: 9px 16px; color: var(--muted); }
+  .search input { border: none; background: transparent; outline: none; flex: 1; font-size: 13px; color: var(--on-surface); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .icon-btn { width: 38px; height: 38px; border-radius: 999px; display: grid; place-items: center; background: none; border: none; cursor: pointer; color: var(--on-surface-variant); }
+  .icon-btn:hover { background: var(--surface-low); }
+  .userchip { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; border-radius: 999px; cursor: pointer; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+
+  .page { flex: 1; overflow-y: auto; padding: 24px; }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+  .crumbs { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .crumbs a { color: var(--on-surface-variant); text-decoration: none; }
+  .crumbs a:hover { color: var(--primary); }
+  .crumbs .sep { color: var(--surface-variant); }
+  .crumbs .here { color: var(--primary); font-weight: 700; }
+  .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 12px; }
+  .page-title { font-size: 24px; font-weight: 700; }
+  .page-sub { color: var(--muted); margin-top: 4px; font-size: 13.5px; }
+  .head-actions { display: flex; gap: 10px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--on-surface-variant); }
+  .btn:hover { background: var(--surface-low); }
+  .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .btn.primary:hover { background: var(--primary-dark); }
+
+  .grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; align-items: start; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 18px; }
+  .card-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .card-head .ico { color: var(--primary); font-size: 18px; }
+  .card-head h2 { font-size: 15px; font-weight: 700; }
+  .card-head .grow { margin-left: auto; font-size: 11px; color: var(--muted); font-weight: 700; }
+  .card-body { padding: 18px; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--on-surface-variant); margin-bottom: 6px; }
+  .field label .req { color: var(--red); }
+  .field input, .field select, .field textarea {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px;
+    font-family: inherit; outline: none; background: var(--surface);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(11,107,203,.12); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* Service picker — now inside Basic Information */
+  .svc-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface-low); }
+  .svc-wrap .svc-label { display: flex; align-items: center; gap: 8px; padding: 12px 14px; font-size: 12.5px; font-weight: 700; color: var(--on-surface-variant); border-bottom: 1px solid var(--border); }
+  .svc-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; min-height: 40px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: var(--primary); color: #fff; border-radius: 999px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; }
+  .chip .x { cursor: pointer; opacity: .8; font-weight: 800; }
+  .chip .x:hover { opacity: 1; }
+  .svc-empty { font-size: 12.5px; color: var(--muted); padding: 2px 4px; }
+  .svc-toggle { width: 100%; border: none; border-top: 1px solid var(--border); background: var(--surface); padding: 10px 14px; font-size: 12.5px; font-weight: 700; color: var(--primary); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .svc-toggle:hover { background: var(--surface-low); }
+  .svc-panel { max-height: 230px; overflow-y: auto; display: none; border-top: 1px solid var(--border); }
+  .svc-panel.open { display: block; }
+  .svc-item { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--border); cursor: pointer; background: var(--surface); }
+  .svc-item:last-child { border-bottom: none; }
+  .svc-item:hover { background: var(--surface-low); }
+  .svc-item .check { width: 17px; height: 17px; border: 2px solid var(--surface-variant); border-radius: 4px; display: grid; place-items: center; flex-shrink: 0; font-size: 11px; font-weight: 800; }
+  .svc-item.on .check { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .svc-item .t { flex: 1; font-size: 13px; font-weight: 600; }
+  .svc-item .r { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+  .task-hint { margin-top: 10px; border: 1px solid var(--primary-container); background: var(--primary-container-soft); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--blue-text); }
+  .task-hint b { color: var(--primary); }
+
+  /* Right panel — sync + flag preview */
+  .preview { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); position: sticky; top: 0; }
+  .preview-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .preview-head .ico { color: var(--green); font-size: 18px; }
+  .preview-head h2 { font-size: 15px; font-weight: 700; }
+  .preview-body { padding: 14px 18px; }
+  .preview-body .empty { font-size: 12.5px; color: var(--muted); text-align: center; padding: 12px 0; }
+  .pt { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .pt:last-child { border-bottom: none; }
+  .pt .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .pt .dot.gst { background: var(--primary); }
+  .pt .dot.tds { background: #16a34a; }
+  .pt .dot.itr { background: #7c3aed; }
+  .pt .dot.roc { background: var(--gold); }
+  .pt .dot.saudit { background: #0d9488; }
+  .pt .t { font-size: 12.5px; font-weight: 600; }
+  .pt .sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  .foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-logo">🛡</div>
+    <div>
+      <div class="brand-name">Vyom CRM</div>
+      <div class="brand-sub">FISCAL PRECISION</div>
+    </div>
+  </div>
+  <nav class="nav">
+    <div class="nav-item"><span class="icon">▦</span> Dashboard</div>
+    <div class="nav-item active"><span class="icon">👥</span> Clients</div>
+    <div class="nav-item"><span class="icon">📄</span> Billing</div>
+    <div class="nav-item"><span class="icon">✅</span> Tasks &amp; Compliance</div>
+    <div class="nav-item"><span class="icon">⚙</span> Settings</div>
+  </nav>
+  <div class="nav-footer">
+    <div class="nav-item"><span class="icon">💬</span> Client requests</div>
+    <div class="nav-item"><span class="icon">⎋</span> Logout</div>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="search"><span>🔍</span><input placeholder="Search clients, projects, or invoices..." /></div>
+    <div class="topbar-right">
+      <button class="icon-btn">🔔</button>
+      <button class="icon-btn">💬</button>
+      <div class="userchip">
+        <div class="avatar" style="background:#0b6bcb;">RA</div>
+        <b style="font-size:13px;">Raman</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="wrap">
+
+      <div>
+        <div class="crumbs">
+          <a href="#">Clients</a><span class="sep">›</span><span class="here">Add Client Profile</span>
+        </div>
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">Add Client Profile</h1>
+            <p class="page-sub">Enter the details below to onboard a new entity — choosing a service sets up its filing tasks automatically.</p>
+          </div>
+          <div class="head-actions">
+            <a class="btn" href="client-quick-add-design.html">⚡ Quick add</a>
+            <button class="btn">Cancel</button>
+            <button class="btn primary">⏎ Create Client</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- LEFT : full form -->
+        <div>
+
+          <!-- Basic Information (includes Services Opted) -->
+          <div class="card">
+            <div class="card-head">
+              <span class="ico">🏢</span>
+              <h2>Basic Information</h2>
+              <span class="grow">Services Opted live inside this card</span>
+            </div>
+            <div class="card-body">
+              <div class="grid2">
+                <div class="field">
+                  <label>Assessee Type</label>
+                  <select>
+                    <option>Proprietor</option>
+                    <option selected>Private Limited</option>
+                    <option>Individual</option>
+                    <option>Partnership</option>
+                    <option>LLP</option>
+                    <option>Others</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Name <span class="req">*</span></label>
+                  <input placeholder="Enter name as registered" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Primary Contact Person</label>
+                <input placeholder="Full name" />
+              </div>
+              <div class="grid2">
+                <div class="field"><label>Email Address</label><input placeholder="contact@company.com" /></div>
+                <div class="field"><label>Phone Number <span class="req">*</span></label><input placeholder="+91 00000 00000" /></div>
+              </div>
+
+              <!-- Services Opted (legacy business IDs too) -->
+              <div class="field" style="margin-top:6px;">
+                <label>Services Opted</label>
+                <div class="svc-wrap">
+                  <div class="svc-label">🟢 What we do for this client <span style="margin-left:auto;color:var(--gold);font-weight:600;">Picks decide Tu/Co filing tasks</span></div>
+                  <div class="svc-chips" id="chips">
+                    <span class="chip">GST Registration &amp; Filing <span class="x">✕</span></span>
+                    <span class="chip">TDS / TCS Compliance <span class="x">✕</span></span>
+                    <span class="svc-empty" id="chips-empty" style="display:none;">None selected</span>
+                  </div>
+                  <button class="svc-toggle" type="button" onclick="document.getElementById('svc-panel').classList.toggle('open')">
+                    <span>Manage services</span><span>▾</span>
+                  </button>
+                  <div class="svc-panel" id="svc-panel">
+                    <div class="svc-item on" data-name="GST Registration &amp; Filing" data-rule="Monthly · 20th" data-dot="gst" onclick="tick(this)"><span class="check">✓</span><span class="t">GST Registration &amp; Filing</span><span class="r">Monthly · 20th</span></div>
+                    <div class="svc-item on" data-name="TDS / TCS Compliance" data-rule="Quarterly 24Q · 31st" data-dot="tds" onclick="tick(this)"><span class="check">✓</span><span class="t">TDS / TCS Compliance</span><span class="r">Quarterly 24Q · 31st</span></div>
+                    <div class="svc-item" data-name="Income Tax Return Filing (ITR)" data-rule="Annual · 31 Jul" data-dot="itr" onclick="tick(this)"><span class="check"></span><span class="t">Income Tax Return Filing (ITR)</span><span class="r">Annual · 31 Jul</span></div>
+                    <div class="svc-item" data-name="Statutory Audit" data-rule="One-off · per FY" data-dot="saudit" onclick="tick(this)"><span class="check"></span><span class="t">Statutory Audit</span><span class="r">One-off · per FY</span></div>
+                    <div class="svc-item" data-name="ROC Compliance" data-rule="Annual AOC-4/MGT-7 · 31 Oct" data-dot="roc" onclick="tick(this)"><span class="check"></span><span class="t">ROC Compliance</span><span class="r">Annual AOC-4/MGT-7 · 31 Oct</span></div>
+                    <div class="svc-item" data-name="Payroll Processing" data-rule="Monthly · 28th" data-dot="tds" onclick="tick(this)"><span class="check"></span><span class="t">Payroll Processing</span><span class="r">Monthly · 28th</span></div>
+                  </div>
+                </div>
+                <div class="task-hint" id="task-hint">
+                  ✅ <b>2 services</b> selected — their filing tasks appear in <b>Tasks &amp; Compliance</b> and stay in sync if you edit them later.
+                </div>
+              </div>
+
+              <div class="grid2" style="margin-top:14px;">
+                <div class="field"><label>PAN</label><input placeholder="ABCDE1234F" /></div>
+                <div class="field"><label>GSTIN</label><input placeholder="22AAAAA0000A1Z5" /></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Billing Address -->
+          <div class="card">
+            <div class="card-head"><span class="ico">📍</span><h2>Billing Address</h2></div>
+            <div class="card-body">
+              <div class="field"><label>Street Address</label><input placeholder="Building, Street, Area" /></div>
+              <div class="grid2">
+                <div class="field"><label>Address Line 2</label><input placeholder="Suite, Floor, Landmark" /></div>
+                <div class="field"><label>City</label><input placeholder="City" /></div>
+              </div>
+              <div class="grid2">
+                <div class="field"><label>State</label><select><option>Select state</option><option>Karnataka</option><option>Maharashtra</option><option>Tamil Nadu</option></select></div>
+                <div class="field"><label>PIN Code</label><input placeholder="560001" maxlength="6" /></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="card">
+            <div class="card-head"><span class="ico">🚦</span><h2>Client Status</h2></div>
+            <div class="card-body">
+              <div class="field">
+                <select>
+                  <option selected>Active</option>
+                  <option>Prospect</option>
+                  <option>Inactive</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div class="card">
+            <div class="card-head"><span class="ico">🗒</span><h2>Internal Notes</h2></div>
+            <div class="card-body">
+              <div class="field">
+                <textarea rows="3" placeholder="Additional notes about this client..."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT : live preview -->
+        <div class="preview">
+          <div class="preview-head">
+            <span class="ico">✅</span>
+            <h2>Filing tasks (auto)</h2>
+          </div>
+          <div class="preview-body" id="pv-body"></div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <button class="btn">Cancel</button>
+        <button class="btn primary">Create Client</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const RULES = {
+    'GST Registration &amp; Filing': 'GSTR-1 · 11th · GSTR-3B · 20th · monthly',
+    'TDS / TCS Compliance': '24Q quarterly · payment monthly by 7th',
+    'Income Tax Return Filing (ITR)': 'Annual · due 31 Jul',
+    'Statutory Audit': 'One-off · per financial year',
+    'ROC Compliance': 'Annual · AOC-4/MGT-7 due 31 Oct',
+    'Payroll Processing': 'Monthly · payroll run by 28th',
+  };
+  const DOTS = { 'GST Registration &amp; Filing': 'gst', 'TDS / TCS Compliance': 'tds', 'Income Tax Return Filing (ITR)': 'itr', 'Statutory Audit': 'saudit', 'ROC Compliance': 'roc', 'Payroll Processing': 'tds' };
+
+  function tick(el) {
+    el.classList.toggle('on');
+    render();
+  }
+  function selected() {
+    return Array.from(document.querySelectorAll('.svc-item.on')).map((el) => ({
+      name: el.dataset.name,
+      rule: RULES[el.dataset.name] || el.dataset.rule,
+      dot: DOTS[el.dataset.name] || 'gst',
+    }));
+  }
+  function render() {
+    const sel = selected();
+    const chips = document.getElementById('chips');
+    const empty = document.getElementById('chips-empty');
+    const pv = document.getElementById('pv-body');
+
+    chips.querySelectorAll('.chip').forEach((c) => c.remove());
+    if (sel.length === 0) empty.style.display = ''; else empty.style.display = 'none';
+    sel.forEach((s) => {
+      const c = document.createElement('span');
+      c.className = 'chip';
+      c.innerHTML = s.name + ' <span class="x">✕</span>';
+      c.querySelector('.x').onclick = () => {
+        const item = Array.from(document.querySelectorAll('.svc-item')).find((i) => i.dataset.name === s.name);
+        if (item) item.classList.remove('on');
+        render();
+      };
+      chips.appendChild(c);
+    });
+
+    document.getElementById('task-hint').innerHTML =
+      '✅ <b>' + sel.length + ' services</b> selected — their filing tasks appear in <b>Tasks &amp; Compliance</b> and stay in sync if you edit them later.';
+
+    if (sel.length === 0) {
+      pv.innerHTML = '<div class="empty">No filing tasks — pick a service to see what gets created.</div>';
+      return;
+    }
+    pv.innerHTML = sel.map((s) => `
+      <div class="pt">
+        <span class="dot ${s.dot}"></span>
+        <div>
+          <div class="t">${s.name === 'GST Registration &amp; Filing' ? 'GSTR-1 · GSTR-3B' : s.name}</div>
+          <div class="sub">${s.rule}</div>
+        </div>
+      </div>`).join('');
+  }
+  render();
+</script>
+
+</body>
+</html>

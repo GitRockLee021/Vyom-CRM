@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vyom CRM — Trello-style Task Card</title>
+<style>
+  :root {
+    --background: rgba(20,18,26,.5);
+    --surface: #ffffff;
+    --surface-container-low: #f3f0f6;
+    --surface-container-high: #e9e5ec;
+    --outline-variant: #e3dfe8;
+    --outline: #757c89;
+    --primary: #0b6bcb;
+    --primary-fixed: #d7ebff;
+    --on-surface: #1c1b1f;
+    --on-surface-variant: #49454f;
+    --error: #ba1a1a;
+    --error-container: #ffdad6;
+    --on-error-container: #93000a;
+    --green: #166534;
+    --green-bg: #dcfce7;
+    --red: #991b1b;
+    --red-bg: #fee2e2;
+    --gold: #92400e;
+    --gold-bg: #fef3c7;
+    --violet-text: #6b21a8;
+    --violet-bg: #ede9fe;
+    --radius: 0.5rem;
+    --radius-xl: 0.875rem;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Inter", system-ui, -apple-system, sans-serif; background: #f4f2f7; color: var(--on-surface); font-size: 14px; }
+  .demo-bar { position: sticky; top: 0; z-index: 5; background: #1c1b1f; color: #fff; padding: 10px 20px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .demo-bar b { color: #7cc0ff; }
+  .switch { display: flex; gap: 8px; }
+  .switch a { color: #c8c4cf; border: 1px solid #3a3742; padding: 4px 12px; border-radius: 6px; text-decoration: none; font-size: 12px; cursor: pointer; background: transparent; font-family: inherit; }
+  .switch a.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  .page { max-width: 1000px; margin: 24px auto 60px; padding: 0 20px; }
+  .hint { background: var(--surface-container-low); border: 1px dashed var(--outline); color: var(--on-surface-variant); padding: 12px 16px; border-radius: var(--radius); font-size: 13px; margin-bottom: 18px; }
+  .hint b { color: var(--on-surface); }
+
+  /* ---------- draggable board ---------- */
+  .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; user-select: none; }
+  .column { background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); padding: 12px; min-height: 200px; transition: background .15s, border-color .15s; }
+  .column.drag-over { background: #e9efff; border-color: var(--primary); }
+  .col-head { display: flex; align-items: center; gap: 8px; padding: 4px 6px 12px; font-weight: 700; font-size: 14px; }
+  .col-head .cnt { background: var(--surface-container-high); color: var(--on-surface-variant); border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 600; min-width: 24px; text-align: center; }
+  .col-head .grow2 { margin-left: auto; font-size: 11px; color: var(--on-surface-variant); }
+  .card { background: var(--surface); border: 1px solid var(--outline-variant); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(16,14,23,.06); cursor: grab; transition: border-color .1s, box-shadow .1s, opacity .15s; }
+  .card:hover { border-color: var(--primary); box-shadow: 0 2px 6px rgba(16,14,23,.12); }
+  .card.dragging { opacity: .45; }
+  .card.removed { background: #fff7f7; border-color: color-mix(in srgb, var(--red) 45%, transparent); }
+  .card .ttl { font-size: 13.5px; font-weight: 600; }
+  .card .sub { font-size: 11.5px; color: var(--on-surface-variant); margin-top: 5px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .card .sub .curr { color: var(--on-surface-variant); font-size: 11px; }
+  .badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+  .b-gst { background: var(--primary-fixed); color: var(--primary); }
+  .b-client { background: var(--surface-container-high); color: var(--on-surface-variant); }
+  .b-removed { background: var(--red-bg); color: var(--red); }
+  .meta-line { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11.5px; color: var(--on-surface-variant); font-weight: 600; }
+  .meta-line .due { color: var(--error); }
+  .avatar { width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 9px; font-weight: 700; display: grid; place-items: center; }
+  .check-count { font-size: 11px; font-weight: 600; color: var(--on-surface-variant); display: inline-flex; align-items: center; gap: 4px; }
+
+  /* ---------- modal ---------- */
+  .overlay { position: fixed; inset: 0; background: var(--background); display: none; align-items: flex-start; justify-content: center; padding: 40px 20px; z-index: 50; }
+  .overlay.open { display: flex; }
+  .sheet { background: var(--surface); border-radius: var(--radius-xl); max-width: 720px; width: 100%; max-height: calc(100vh - 80px); overflow-y: auto; box-shadow: 0 10px 40px rgba(16,14,23,.25); }
+  .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--outline-variant); position: sticky; top: 0; background: var(--surface); z-index: 2; }
+  .sheet-head h2 { font-size: 18px; line-height: 26px; }
+  .sheet-head .sub { color: var(--on-surface-variant); font-size: 12.5px; margin-top: 6px; }
+  .x { border: none; background: var(--surface-container-low); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; color: var(--on-surface-variant); flex-shrink: 0; }
+  .sheet-body { padding: 20px 24px 24px; }
+
+  .removed-banner { display: flex; gap: 10px; align-items: flex-start; background: var(--red-bg); border: 1px solid color-mix(in srgb, var(--error) 35%, transparent); color: var(--on-error-container); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 18px; font-size: 13px; }
+  .removed-banner .m { width: 20px; height: 20px; }
+
+  /* two-column Trello body */
+  .sheet-cols { display: grid; grid-template-columns: minmax(0,1fr) 220px; gap: 24px; }
+  .main-col { min-width: 0; }
+  .side-col { min-width: 0; }
+
+  .section { margin-top: 24px; }
+  .section h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--on-surface-variant); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+
+  .field-row { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 9px 0; border-bottom: 1px solid var(--outline-variant); }
+  .field-row:last-child { border-bottom: none; }
+  .field-row .k { width: 84px; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--on-surface-variant); font-weight: 700; flex-shrink: 0; }
+  .field-row .v { font-weight: 600; }
+  .side-btn { display: flex; align-items: center; gap: 8px; width: 100%; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; color: var(--on-surface); cursor: pointer; font-family: inherit; margin-bottom: 8px; text-align: left; }
+  .side-btn:hover { background: var(--surface-container-high); }
+
+  /* checklist */
+  .checklist-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .checklist-progress .track { flex: 1; height: 6px; background: var(--surface-container-high); border-radius: 999px; overflow: hidden; }
+  .checklist-progress .track i { display: block; height: 100%; background: var(--primary); border-radius: 999px; transition: width .2s; }
+  .checklist-progress span { font-size: 11.5px; color: var(--on-surface-variant); font-weight: 600; white-space: nowrap; }
+  .checklist { display: flex; flex-direction: column; gap: 7px; }
+  .checkitem { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 7px 10px; background: var(--surface-container-low); border-radius: 8px; }
+  .checkitem .ck { width: 15px; height: 15px; border: 2px solid var(--outline); border-radius: 4px; display: inline-block; cursor: pointer; flex-shrink: 0; vertical-align: middle; }
+  .checkitem .ck.done { background: var(--green); border-color: var(--green); position: relative; }
+  .checkitem .ck.done::after { content: "✓"; color: #fff; font-size: 9px; font-weight: 800; position: absolute; inset: 0; display: grid; place-items: center; }
+  .checkitem .txt { flex: 1; }
+  .checkitem.done-st .txt { color: var(--on-surface-variant); text-decoration: line-through; }
+  .checkitem .new-item { flex: 1; border: 1px solid var(--primary); border-radius: 6px; padding: 4px 8px; font-size: 13px; font-family: inherit; outline: none; }
+  .del-item { cursor: pointer; font-size: 13px; flex-shrink: 0; color: var(--on-surface-variant); opacity: 0; transition: opacity .15s; }
+  .checkitem:hover .del-item { opacity: 1; }
+  .del-item:hover { color: var(--error); }
+  .add-link { display: inline-flex; align-items: center; gap: 5px; color: var(--primary); font-size: 12.5px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+  textarea.desc { width: 100%; border: 1px solid var(--outline-variant); border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: inherit; resize: vertical; min-height: 52px; max-height: 120px; outline: none; background: var(--surface-container-lowest); color: var(--on-surface); }
+  textarea.desc:focus { border-color: var(--primary); }
+  textarea.desc::placeholder { color: var(--on-surface-variant); }
+
+  /* comments */
+  .comments { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+  .compose { display: flex; gap: 10px; align-items: flex-start; }
+  .compose textarea { flex: 1; border: 1px solid var(--outline-variant); border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: inherit; resize: vertical; min-height: 42px; outline: none; }
+  .compose textarea:focus { border-color: var(--primary); }
+  .comment { display: flex; gap: 10px; }
+  .comment .who { font-size: 12.5px; }
+  .comment .who b { color: var(--on-surface); }
+  .comment .who .tm { color: var(--on-surface-variant); font-size: 11px; font-weight: 400; margin-left: 6px; }
+  .comment .txt { font-size: 13px; margin-top: 3px; color: var(--on-surface); }
+  .comment .bubble { background: var(--surface-container-low); border-radius: 0 8px 8px 8px; padding: 8px 11px; }
+  .avatar-l { width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--outline-variant); align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; border-radius: var(--radius); padding: 9px 16px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--outline-variant); background: var(--surface); color: var(--on-surface-variant); cursor: pointer; font-family: inherit; }
+  .btn.primary { background: var(--primary); color: #fff; border-color: transparent; }
+  .btn.green { background: var(--green); color: #fff; border-color: transparent; }
+  .grow3 { flex: 1; }
+  .footer-note { text-align: center; color: var(--on-surface-variant); font-size: 12px; margin-top: 16px; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1c1b1f; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.25); opacity: 0; transition: .25s; z-index: 100; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 640px) { .sheet-cols { grid-template-columns: 1fr; } .board { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <div>Task Card — <b>drag cards between columns</b> · click opens Trello-style detail</div>
+  <div class="switch">
+    <a href="#" onclick="openSheet('removed');return false;" style="color:var(--red-bg);border-color:var(--red);">⚠ Removed task</a>
+    <button class="on" onclick="showToast('Tip: drag a card to move it between columns')">Drag &amp; drop enabled</button>
+  </div>
+</div>
+
+<div class="page">
+  <div class="hint">
+    <b>Drag any card</b> between the three columns — the drop persists in the mockup with an undo toast.
+    <b>Click a card</b> to open the Trello-style detail (checklists + comments). Toggle the red link to preview the "service removed" variant.
+  </div>
+
+  <div class="board" id="board">
+    <div class="column" data-col="To Do">
+      <div class="col-head">⬜ To Do <span class="cnt">2</span></div>
+      <div class="card" draggable="true" data-status="To Do" data-title="Reconcile input credit — GSTR-2B" onclick="openSheet('removed')">
+        <div class="ttl">Reconcile input credit — GSTR-2B</div>
+        <div class="sub"><span class="badge b-gst">GST</span> <span class="badge b-client">Krishna &amp; Co</span> <span class="badge b-removed">⚠ Service removed</span></div>
+        <div class="meta-line"><span>Aug 26</span><span><span class="avatar" style="background:#0b6bcb;">RA</span></span></div>
+      </div>
+      <div class="card" draggable="true" data-status="To Do" data-title="File monthly GSTR-3B return" onclick="openSheet('normal')">
+        <div class="ttl">File monthly GSTR-3B return</div>
+        <div class="sub"><span class="badge b-gst">GST</span> <span class="badge b-client">Rathi Traders</span></div>
+        <div class="sub"><span class="check-count">☑ 2/4</span> <span class="due curr" style="color:var(--error);margin-left:auto;">Due 20 Sep</span></div>
+      </div>
+    </div>
+    <div class="column" data-col="In Progress">
+      <div class="col-head">🔄 In Progress <span class="cnt">1</span></div>
+      <div class="card" draggable="true" data-status="In Progress" data-title="Statutory audit — financials" onclick="openSheet('normal')">
+        <div class="ttl">Statutory audit — financials</div>
+        <div class="sub"><span class="badge b-gst">AUDIT</span> <span class="badge b-client">Somya Exports</span></div>
+        <div class="meta-line"><span>FY 25-26</span><span><span class="avatar" style="background:#0b6bcb;">RA</span></span></div>
+      </div>
+    </div>
+    <div class="column" data-col="Completed">
+      <div class="col-head">✓ Completed <span class="cnt">1</span></div>
+      <div class="card" draggable="true" data-status="Completed" onclick="openSheet('normal')">
+        <div class="ttl">File GSTR-1 (Aug) with HSN</div>
+        <div class="sub"><span class="badge b-gst">GST</span> <span class="badge b-client">Rathi Traders</span></div>
+        <div class="meta-line"><span>11 Sep</span><span><span class="avatar" style="background:#7c3aed;">PR</span></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ NORMAL TASK SHEET (Trello-style) ============ -->
+<div class="overlay" id="normal">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div>
+        <h2>File monthly GSTR-3B return</h2>
+        <div class="sub"><span class="badge b-gst">GST</span> <span class="badge b-client">Rathi Traders</span> · Period Sep 2026</div>
+      </div>
+      <button class="x" onclick="closeSheet()">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="sheet-cols">
+        <div class="main-col">
+
+          <div class="section" style="margin-top:0;">
+            <h3>📝 Description</h3>
+            <textarea class="desc" placeholder="Add an optional description… (optional)"></textarea>
+          </div>
+
+          <div class="section">
+            <h3>☑ Checklist</h3>
+            <div class="checklist-progress">
+              <div class="track"><i style="width:50%"></i></div>
+              <span>2 of 4 done</span>
+            </div>
+            <div class="checklist">
+              <div class="checkitem"><span class="ck done"></span><span class="txt">Reconcile GSTR-2B purchases</span></div>
+              <div class="checkitem"><span class="ck done"></span><span class="txt">Draft return from books</span></div>
+              <div class="checkitem"><span class="ck"></span><span class="txt">Client review &amp; approval</span></div>
+              <div class="checkitem"><span class="ck"></span><span class="txt">Pay &amp; file on portal</span></div>
+              <template id="item-tpl"><div class="checkitem"><span class="ck"></span><input class="new-item" placeholder="Type item…" maxlength="120" /><span class="del-item" title="Remove">🗑</span></div></template>
+            </div>
+            <div class="add-link" onclick="addItem(this, 0)">＋ Add item</div>
+          </div>
+
+          <div class="section">
+            <h3>💬 Comments</h3>
+            <div class="compose">
+              <div class="avatar-l" style="background:#0b6bcb;">PR</div>
+              <textarea placeholder="Write a comment…"></textarea>
+            </div>
+            <div class="comments">
+              <div class="comment">
+                <div class="avatar-l" style="background:#0b6bcb;">PR</div>
+                <div>
+                  <div class="who"><b>Priya</b><span class="tm">Today · 11:02</span></div>
+                  <div class="bubble">Client has approved the draft, waiting on purchase register from their side.</div>
+                </div>
+              </div>
+              <div class="comment">
+                <div class="avatar-l" style="background:#7c3aed;">PR</div>
+                <div>
+                  <div class="who"><b>Priya</b><span class="tm">Yesterday · 16:40</span></div>
+                  <div class="bubble">Created the draft — please review the input credit section, Raman.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>🕒 Activity</h3>
+            <div class="comment" style="margin-top:4px;">
+              <div class="avatar-l" style="background:var(--surface-container-high);color:var(--on-surface-variant);">→</div>
+              <div><div class="who"><b>Priya</b> moved task to <b>In Progress</b><span class="tm">Today · 10:58</span></div></div>
+            </div>
+            <div class="comment">
+              <div class="avatar-l" style="background:var(--surface-container-high);color:var(--on-surface-variant);">↻</div>
+              <div><div class="who"><b>System</b> created September occurrence<span class="tm">1 Sep</span></div></div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="side-col">
+          <div class="section" style="margin-top:0;">
+            <h3>Details</h3>
+            <div class="field-row"><span class="k">Status</span><span class="v" style="color:#1d4ed8;">In Progress</span></div>
+            <div class="field-row"><span class="k">Due date</span><span class="v" style="color:var(--error);">20 Sep</span></div>
+            <div class="field-row"><span class="k">Assignee</span><span class="v"><span class="avatar" style="background:#7c3aed;width:20px;height:20px;font-size:9px;">PR</span> Priya</span></div>
+            <div class="field-row"><span class="k">Service</span><span class="v">GST Filing</span></div>
+          </div>
+          <div class="section">
+            <h3>Actions</h3>
+            <button class="side-btn">👤 Assign to…</button>
+            <button class="side-btn">📅 Change due date</button>
+            <button class="side-btn">🏷 Labels</button>
+            <button class="side-btn">↻ Generate next month</button>
+            <button class="side-btn green" onclick="completeFromModal(this)" style="background:var(--green);border-color:var(--green);color:#fff;">✓ Mark Completed</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary">↻ Auto-generate next month</button>
+        <button class="btn green" onclick="completeFromModal(this)">✓ Mark Completed</button>
+        <div class="grow3"></div>
+        <button class="btn">Delete task</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SERVICE REMOVED SHEET (Trello-style) ============ -->
+<div class="overlay" id="removed">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div>
+        <h2>Reconcile input credit — GSTR-2B</h2>
+        <div class="sub"><span class="badge b-gst">GST</span> <span class="badge b-client">Krishna &amp; Co</span> · Period Aug 2026</div>
+      </div>
+      <button class="x" onclick="closeSheet()">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="removed-banner">
+        <div class="m">⚠️</div>
+        <div><b>This service was removed from the client.</b> This task is paused and stays in To Do until you decide. Review the log, then mark it completed or archive it.</div>
+      </div>
+
+      <div class="sheet-cols">
+        <div class="main-col">
+
+          <div class="section" style="margin-top:0;">
+            <h3>📝 Description</h3>
+            <textarea class="desc" placeholder="Add an optional description… (optional)"></textarea>
+          </div>
+
+          <div class="section">
+            <h3>☑ Checklist</h3>
+            <div class="checklist-progress">
+              <div class="track"><i style="width:50%"></i></div>
+              <span>1 of 2 done</span>
+            </div>
+            <div class="checklist">
+              <div class="checkitem"><span class="ck done"></span><span class="txt">Reconcile GSTR-2B purchases</span></div>
+              <div class="checkitem"><span class="ck"></span><span class="txt">Draft return from books</span></div>
+            </div>
+            <div class="add-link" onclick="addItem(this, 1)">＋ Add item</div>
+          </div>
+
+          <div class="section">
+            <h3>⚠ Service removal log</h3>
+            <div class="comment" style="margin-top:2px;">
+              <div class="avatar-l" style="background:var(--red);">⚠</div>
+              <div><div class="who"><b>GST Filing</b> service removed by <b>Raman</b><span class="tm">Today · 09:15</span></div>
+              <div class="bubble" style="background:var(--red-bg);color:var(--on-error-container);">Task paused and flagged for review — no longer regenerated.</div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>💬 Comments</h3>
+            <div class="compose">
+              <div class="avatar-l" style="background:#0b6bcb;">RA</div>
+              <textarea placeholder="Write a comment…"></textarea>
+            </div>
+            <div class="comments">
+              <div class="comment">
+                <div class="avatar-l" style="background:#0b6bcb;">RA</div>
+                <div>
+                  <div class="who"><b>Raman</b><span class="tm">Today · 09:20</span></div>
+                  <div class="bubble">Client changed scope — dropping GST services. This reconciliation was half done, so I'm keeping it for review.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="side-col">
+          <div class="section" style="margin-top:0;">
+            <h3>Details</h3>
+            <div class="field-row"><span class="k">Status</span><span class="v"><span class="badge b-removed">⚠ Removed</span></span></div>
+            <div class="field-row"><span class="k">Due date</span><span class="v" style="color:var(--error);">18 Sep</span></div>
+            <div class="field-row"><span class="k">Assignee</span><span class="v"><span class="avatar" style="background:#0b6bcb;width:20px;height:20px;font-size:9px;">RA</span> Raman</span></div>
+            <div class="field-row"><span class="k">Service</span><span class="v" style="color:var(--error);text-decoration:line-through;">GST Filing</span></div>
+          </div>
+          <div class="section">
+            <h3>Actions</h3>
+            <button class="side-btn">👤 Assign to…</button>
+            <button class="side-btn" style="opacity:.5;pointer-events:none;">📅 Change due date</button>
+            <button class="side-btn green" onclick="completeFromModal(this)" style="background:var(--green);border-color:var(--green);color:#fff;">✓ Mark Completed</button>
+            <button class="side-btn" style="color:var(--error);border-color:color-mix(in srgb,var(--error) 40%,transparent);">🗄 Archive</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-note" style="color:var(--error);margin-top:16px;">This card is not draggable to Completed — mark completed or archive it from here.</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ---------- draggable cards ----------
+  const board = document.getElementById('board');
+  let dragCard = null;
+
+  document.querySelectorAll('.card').forEach(c => {
+    c.addEventListener('dragstart', (e) => {
+      dragCard = c;
+      c.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', 'x');
+      setTimeout(() => document.querySelectorAll('.card').forEach(x => x.style.pointerEvents = 'none'), 0);
+    });
+    c.addEventListener('dragend', () => {
+      c.classList.remove('dragging');
+      document.querySelectorAll('.card').forEach(x => x.style.pointerEvents = '');
+      document.querySelectorAll('.column').forEach(x => x.classList.remove('drag-over'));
+    });
+  });
+
+  document.querySelectorAll('.column').forEach(col => {
+    col.addEventListener('dragover', (e) => { e.preventDefault(); if (e.target.closest('.card') === dragCard) return; col.classList.add('drag-over'); });
+    col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+    col.addEventListener('drop', (e) => {
+      e.preventDefault();
+      col.classList.remove('drag-over');
+      if (!dragCard) return;
+      const targetCol = col.dataset.col;
+      const isRemovedCard = dragCard.classList.contains('removed') || dragCard.querySelector('.b-removed');
+      if (isRemovedCard && targetCol === 'Completed') {
+        showToast('⚠ Removed-service card must be completed or archived from its detail view');
+        return;
+      }
+      col.appendChild(dragCard);
+      dragCard.dataset.status = targetCol;
+      recount();
+      showToast('Moved to "' + targetCol + '" — Undo');
+      dragCard = null;
+    });
+  });
+
+  function recount() {
+    document.querySelectorAll('.column').forEach(col => {
+      col.querySelector('.cnt').textContent = col.querySelectorAll('.card').length;
+    });
+  }
+
+  // ---------- editable checklist ----------
+  document.addEventListener('click', (e) => {
+    const ck = e.target.closest('.checkitem .ck');
+    if (ck) {
+      const item = ck.closest('.checkitem');
+      item.classList.toggle('done-st');
+      ck.classList.toggle('done');
+      updateProgress(item);
+      return;
+    }
+    if (e.target.closest('.del-item')) {
+      const item = e.target.closest('.checkitem');
+      item.remove();
+      updateProgress(item.closest('.section') || item);
+      return;
+    }
+    if (e.target.closest('.new-item')) {
+      const inp = e.target.closest('.new-item');
+      inp.addEventListener('keydown', function commit(ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); const v = inp.value.trim(); if (v) { const n = document.createElement('div'); n.className='checkitem'; n.innerHTML='<span class="ck"></span><span class="txt"></span><span class="del-item">🗑</span>'; n.querySelector('.txt').textContent = v; inp.replaceWith(n); showToast('Checklist item added'); updateProgress(inp.closest('.section') || inp); } else { inp.remove(); } }
+      });
+    }
+    if (e.target.closest('.add-link')) {
+      const link = e.target.closest('.add-link');
+      const sheet = link.closest('.sheet');
+      const tpl = document.getElementById('item-tpl');
+      const newItem = tpl.content.cloneNode(true).querySelector('.checkitem');
+      link.previousElementSibling.appendChild(newItem);
+      newItem.querySelector('.new-item').focus();
+    }
+  });
+
+  function updateProgress(ctx) {
+    const section = (ctx && ctx.classList && ctx.classList.contains('section')) ? ctx : (ctx && ctx.closest ? ctx.closest('.section') : null);
+    if (!section) return;
+    const prog = section.querySelector('.checklist-progress');
+    if (!prog) return;
+    const items = section.querySelectorAll('.checkitem');
+    const done = section.querySelectorAll('.checkitem.done-st').length;
+    const total = items.length;
+    const pct = total ? Math.round(done / total * 100) : 0;
+    prog.querySelector('.track i').style.width = pct + '%';
+    prog.querySelector('span').textContent = done + ' of ' + total + ' done';
+    const card = [...document.querySelectorAll('.card')].find(c => c.dataset.status === 'Completed' ? false : true);
+  }
+
+  // ---------- complete from modal -> move card to Completed column ----------
+  function completeFromModal(btn) {
+    const overlay = btn.closest('.overlay');
+    overlay.classList.remove('open');
+    const title = overlay.querySelector('h2').textContent;
+    const card = [...document.querySelectorAll('.card')].find(c => c.dataset.title === title);
+    if (!card) return;
+    const compCol = board.querySelector('[data-col="Completed"]');
+    if (card.classList.contains('removed') || card.querySelector('.b-removed')) {
+      card.classList.remove('removed');
+    }
+    compCol.appendChild(card);
+    card.dataset.status = 'Completed';
+    showToast('Marked completed → moved to "Completed" — Undo');
+    recount();
+  }
+
+  // ---------- modal ----------
+  function openSheet(id) {
+    document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open'));
+    document.getElementById(id).classList.add('open');
+  }
+  function closeSheet() {
+    document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open'));
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
+
+  // ---------- toast ----------
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+</script>
+</body>
+</html>

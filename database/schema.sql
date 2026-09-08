@@ -49,11 +49,10 @@ CREATE INDEX idx_clients_gstin ON clients (gstin) WHERE gstin IS NOT NULL;
 -- ---------- Services offered ----------
 CREATE TABLE services (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code         VARCHAR(30) NOT NULL UNIQUE,       -- e.g. GST-FILING, ITR-IND
+  code         VARCHAR(30),                       -- optional shorthand (not used in the flat UI)
   name         VARCHAR(150) NOT NULL,
   description  TEXT,
-  category     VARCHAR(30) NOT NULL DEFAULT 'other'
-               CHECK (category IN ('taxation', 'compliance', 'advisory', 'audit', 'registration', 'other')),
+  category     VARCHAR(30) DEFAULT 'other',       -- optional grouping (not used in the flat UI)
   default_fee  NUMERIC(12, 2),
   is_recurring BOOLEAN NOT NULL DEFAULT FALSE,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()

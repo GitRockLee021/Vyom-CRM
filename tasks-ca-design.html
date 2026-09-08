@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vyom CRM — Tasks &amp; Compliance | CA Practice design mockup</title>
+<style>
+  :root {
+    --bg: #f4f2f7;
+    --surface: #ffffff;
+    --surface-low: #f7f3fa;
+    --surface-high: #ececf0;
+    --surface-variant: #dfd7e0;
+    --border: #e4e0e9;
+    --on-surface: #1c1b1f;
+    --on-surface-variant: #49454f;
+    --muted: #757c89;
+    --primary: #0b6bcb;
+    --primary-dark: #0956a6;
+    --primary-container: #d7ebff;
+    --primary-container-soft: #eaf4ff;
+    --green: #166534;
+    --green-bg: #dcfce7;
+    --red: #991b1b;
+    --red-bg: #fee2e2;
+    --gold: #92400e;
+    --gold-bg: #fef3c7;
+    --blue-bg: #dbeafe;
+    --blue-text: #1d4ed8;
+    --violet-text: #6b21a8;
+    --violet-bg: #ede9fe;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.04);
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg); color: var(--on-surface); font-size: 14px;
+    display: flex; height: 100vh; overflow: hidden;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    width: 256px; background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 16px 16px 24px; flex-shrink: 0;
+  }
+  .brand { display: flex; gap: 12px; align-items: center; padding: 8px; margin-bottom: 24px; }
+  .brand-logo { width: 40px; height: 40px; border-radius: 8px; background: var(--primary-container); display: flex; align-items: center; justify-content: center; color: var(--primary); font-weight: 800; font-size: 18px; }
+  .brand-name { font-size: 17px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+  .brand-sub { font-size: 10px; letter-spacing: 1.5px; color: var(--muted); }
+  .nav { display: flex; flex-direction: column; gap: 4px; }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: var(--on-surface-variant); cursor: pointer; user-select: none; }
+  .nav-item:hover { background: var(--surface-low); color: var(--on-surface); }
+  .nav-item.active { background: var(--primary-container-soft); color: var(--primary); font-weight: 700; box-shadow: inset 3px 0 0 var(--primary); }
+  .nav-item .icon { width: 20px; height: 20px; display: grid; place-items: center; }
+  .nav-item .grow { margin-left: auto; font-size: 11px; color: var(--muted); font-weight: 600; }
+  .nav-item .grow.warn { color: var(--red); }
+  .nav-footer { margin-top: auto; border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 4px; }
+
+  /* ---------- Main ---------- */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    height: 64px; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px; padding: 0 24px;
+  }
+  .search { flex: 1; max-width: 420px; display: flex; align-items: center; gap: 8px; background: var(--surface-low); border: 1px solid transparent; border-radius: 999px; padding: 9px 16px; color: var(--muted); }
+  .search input { border: none; background: transparent; outline: none; flex: 1; font-size: 13px; color: var(--on-surface); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .icon-btn { width: 38px; height: 38px; border-radius: 999px; display: grid; place-items: center; background: none; border: none; cursor: pointer; color: var(--on-surface-variant); position: relative; }
+  .icon-btn:hover { background: var(--surface-low); }
+  .dot { position: absolute; top: 7px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); border: 2px solid var(--surface); }
+  .userchip { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; border-radius: 999px; cursor: pointer; }
+  .userchip:hover { background: var(--surface-low); }
+
+  /* ---------- Page ---------- */
+  .page { flex: 1; overflow-y: auto; padding: 24px; }
+  .wrap { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+  .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .page-title { font-size: 24px; font-weight: 700; }
+  .page-sub { color: var(--muted); margin-top: 4px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; border-radius: 8px; padding: 10px 16px;
+    font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border);
+    background: var(--surface); color: var(--on-surface-variant);
+  }
+  .btn:hover { background: var(--surface-low); }
+  .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .btn.primary:hover { background: var(--primary-dark); }
+
+  /* ---------- Toolbar ---------- */
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .seg { display: inline-flex; background: var(--surface-high); border-radius: 10px; padding: 3px; gap: 2px; }
+  .seg button { border: none; background: transparent; padding: 8px 15px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--on-surface-variant); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+  .seg button.on { background: var(--surface); color: var(--primary); box-shadow: var(--shadow); }
+  .pills { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .pill { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 7px 13px; font-size: 12.5px; font-weight: 600; color: var(--on-surface-variant); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .pill.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .pill .count { background: var(--surface-high); color: var(--muted); border-radius: 999px; padding: 0 7px; font-size: 11px; }
+  .pill.on .count { background: rgba(255,255,255,.25); color: #fff; }
+  select.fmt {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 8px 12px;
+    font-size: 12.5px; font-weight: 600; color: var(--on-surface-variant); cursor: pointer; font-family: inherit;
+  }
+
+  /* ---------- Compliance strip ---------- */
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .due-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; box-shadow: var(--shadow); display: flex; gap: 12px; align-items: flex-start;
+  }
+  .due-card .ico { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; font-size: 17px; flex-shrink: 0; }
+  .due-card .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 700; }
+  .due-card .dt { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .due-card .cnt { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .due-card .ago { font-size: 11px; font-weight: 700; margin-top: 3px; }
+  .ago.warn { color: var(--red); }
+  .ago.ok { color: var(--green); }
+  .ico.gst { background: var(--blue-bg); }
+  .ico.tds { background: var(--green-bg); }
+  .ico.itr { background: var(--violet-bg); }
+  .ico.roc { background: var(--gold-bg); }
+
+  /* ---------- legend ---------- */
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); flex-wrap: wrap; align-items: center; }
+  .legend b { font-weight: 700; color: var(--on-surface-variant); }
+  .legend .sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+  /* ---------- Board ---------- */
+  .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: start; }
+  .col { background: var(--surface-low); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 9px; min-height: 260px; }
+  .col-head { display: flex; align-items: center; gap: 8px; padding: 4px 6px; }
+  .col-head h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+  .col-head .count-badge { background: var(--surface-high); color: var(--muted); font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 9px; }
+  .col-head .grow { margin-left: auto; }
+  .col-head .mini { color: var(--muted); font-size: 12px; font-weight: 600; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 12px; box-shadow: var(--shadow); cursor: grab; position: relative; }
+  .card .tag-row { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
+  .tag.filing { background: var(--primary-container-soft); color: var(--primary); }
+  .tag.monthly { background: var(--blue-bg); color: var(--blue-text); }
+  .tag.quarterly { background: var(--green-bg); color: var(--green); }
+  .tag.annual { background: var(--violet-bg); color: var(--violet-text); }
+  .tag.client { background: var(--surface-high); color: var(--on-surface-variant); }
+  .tag.overdue { background: var(--red-bg); color: var(--red); }
+  .card h4 { font-size: 13.5px; font-weight: 600; line-height: 1.35; margin-bottom: 8px; }
+  .card .period { font-size: 11.5px; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+  .card .meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .card .meta .due { font-weight: 600; }
+  .card .meta .due.warn { color: var(--red); }
+  .card .meta .grow { margin-left: auto; }
+  .avatar { width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; }
+  .prio { width: 8px; height: 8px; border-radius: 50%; }
+  .prio.high { background: var(--red); }
+  .prio.med { background: #b9810d; }
+  .prio.low { background: #a0a3ad; }
+  .drag-hint { border: 2px dashed var(--primary); border-radius: 9px; height: 64px; background: var(--primary-container-soft); }
+
+  .view { display: none; }
+  .view.on { display: block; }
+
+  /* ---------- List ---------- */
+  .list-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .group-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--surface-low); border-bottom: 1px solid var(--border); font-weight: 700; }
+  .group-head .grow { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .group-head .load { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .bar { width: 90px; height: 6px; border-radius: 999px; background: var(--surface-high); margin-left: 10px; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
+  .bar i.hot { background: var(--red); }
+  table.lt { width: 100%; border-collapse: collapse; }
+  table.lt th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  table.lt td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  table.lt tr:last-child td { border-bottom: none; }
+  .check { width: 18px; height: 18px; border: 2px solid var(--surface-variant); border-radius: 5px; display: inline-block; cursor: pointer; }
+  .check.done { background: var(--green); border-color: var(--green); position: relative; }
+  .check.done::after { content: "✓"; color: #fff; font-size: 11px; font-weight: 800; position: absolute; inset: 0; display: grid; place-items: center; }
+  .status-pill { font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+  .st-todo { background: var(--surface-high); color: var(--on-surface-variant); }
+  .st-prog { background: var(--blue-bg); color: var(--blue-text); }
+  .st-done { background: var(--green-bg); color: var(--green); }
+
+  /* ---------- Calendar ---------- */
+  .cal-wrap { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  .cal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .cal-head h3 { font-size: 15px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-grid .dow { font-size: 11px; text-transform: uppercase; color: var(--muted); text-align: center; padding: 6px 0; font-weight: 600; }
+  .day { height: 60px; border-radius: 8px; padding: 6px; font-size: 12px; text-align: right; border: 1px solid transparent; cursor: pointer; }
+  .day:hover { background: var(--surface-low); }
+  .day.other { color: #c0bcc6; }
+  .day.today { background: var(--primary-container-soft); border-color: var(--primary); font-weight: 700; }
+  .day .markers { display: flex; gap: 3px; margin-top: 12px; justify-content: flex-end; }
+  .marker { width: 7px; height: 7px; border-radius: 50%; }
+  .marker.gst { background: var(--primary); }
+  .marker.tds { background: #16a34a; }
+  .marker.itr { background: var(--violet-text); }
+  .marker.roc { background: var(--gold); }
+  .upcoming { display: flex; flex-direction: column; gap: 10px; }
+  .up-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .up-panel h3 { font-size: 15px; margin-bottom: 12px; }
+  .up-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .up-item:last-child { border-bottom: none; }
+  .up-date { width: 42px; text-align: center; background: var(--surface-low); border-radius: 8px; padding: 5px 0; font-size: 11px; color: var(--muted); font-weight: 600; flex-shrink: 0; }
+  .up-date b { display: block; font-size: 15px; color: var(--primary); }
+  .up-date.due b { color: var(--red); }
+  .hint { font-size: 12px; color: var(--blue-text); background: var(--blue-bg); border-radius: 8px; padding: 9px 12px; margin-top: 10px; }
+
+  /* ---------- Modal ---------- */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.42); display: none; align-items: flex-start; justify-content: center; padding: 6vh 24px 24px; z-index: 50; overflow-y: auto; }
+  .overlay.show { display: flex; }
+  .modal { background: var(--surface); border-radius: 14px; width: 100%; max-width: 620px; box-shadow: 0 24px 48px rgba(0,0,0,.2); padding: 22px; }
+  .modal h2 { font-size: 19px; margin-bottom: 3px; }
+  .modal .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  .frow { margin-bottom: 14px; }
+  .frow label { display: block; font-size: 12px; font-weight: 600; color: var(--on-surface-variant); margin-bottom: 6px; }
+  .frow input, .frow select, .frow textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; font-family: inherit; outline: none; background: var(--surface); }
+  .frow input:focus, .frow select:focus, .frow textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(11,107,203,.12); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .btn-ghost { background: var(--surface); border: 1px solid var(--border); color: var(--on-surface-variant); border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .recur-box { border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; gap: 10px; align-items: flex-start; background: var(--surface-low); }
+  .recur-box .icon { font-size: 18px; }
+  .recur-box b { font-size: 13px; }
+  .recur-box p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  @media (max-width: 1100px) {
+    .board, .cal-wrap { grid-template-columns: 1fr; }
+    .strip { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= SIDEBAR ================= -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-logo">🛡</div>
+    <div>
+      <div class="brand-name">Vyom CRM</div>
+      <div class="brand-sub">FISCAL PRECISION</div>
+    </div>
+  </div>
+  <nav class="nav">
+    <div class="nav-item"><span class="icon">▦</span> Dashboard</div>
+    <div class="nav-item"><span class="icon">👥</span> Clients</div>
+    <div class="nav-item"><span class="icon">📄</span> Billing</div>
+    <div class="nav-item active"><span class="icon">✅</span> Tasks &amp; Compliance <span class="grow warn">6 overdue</span></div>
+    <div class="nav-item"><span class="icon">⚙</span> Settings</div>
+  </nav>
+  <div class="nav-footer">
+    <div class="nav-item"><span class="icon">💬</span> Client requests</div>
+    <div class="nav-item"><span class="icon">⎋</span> Logout</div>
+  </div>
+</aside>
+
+<!-- ================= MAIN ================= -->
+<div class="main">
+  <div class="topbar">
+    <div class="search"><span>🔍</span><input placeholder="Search filings, clients, or tasks..." /></div>
+    <div class="topbar-right">
+      <button class="icon-btn">🔔<span class="dot"></span></button>
+      <button class="icon-btn">💬</button>
+      <div class="userchip">
+        <div class="avatar" style="background:#0b6bcb;width:34px;height:34px;font-size:13px;">RA</div>
+        <b style="font-size:13px;">Raman</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="wrap">
+
+      <div class="page-head">
+        <div>
+          <h1 class="page-title">Tasks &amp; Compliance</h1>
+          <p class="page-sub">Every filing, audit and follow-up — tied to the client, the return and the statutory deadline.</p>
+        </div>
+        <div class="actions" style="display:flex;gap:10px;">
+          <button class="btn">📅 Compliance calendar</button>
+          <button class="btn primary" onclick="openModal()">＋ New Task</button>
+        </div>
+      </div>
+
+      <!-- Statutory deadline strip -->
+      <div class="strip">
+        <div class="due-card">
+          <div class="ico gst">🧾</div>
+          <div>
+            <div class="lbl">GSTR-3B · Sep</div>
+            <div class="dt">20 Sep</div>
+            <div class="cnt">18 client filings due</div>
+            <div class="ago warn">7 due this week</div>
+          </div>
+        </div>
+        <div class="due-card">
+          <div class="ico tds">₹</div>
+          <div>
+            <div class="lbl">TDS Payment · Sep</div>
+            <div class="dt">07 Oct</div>
+            <div class="cnt">12 clients · Q2 24Q due 31 Oct</div>
+            <div class="ago ok">3 days away</div>
+          </div>
+        </div>
+        <div class="due-card">
+          <div class="ico itr">📑</div>
+          <div>
+            <div class="lbl">ITR · AY 2026-27</div>
+            <div class="dt">31 Dec</div>
+            <div class="cnt">Extended due · 21 corporates pending</div>
+            <div class="ago ok">On track</div>
+          </div>
+        </div>
+        <div class="due-card">
+          <div class="ico roc">🏢</div>
+          <div>
+            <div class="lbl">ROC · FY 2025-26</div>
+            <div class="dt">31 Oct</div>
+            <div class="cnt">AOC-4 + MGT-7 · 9 companies</div>
+            <div class="ago warn">forms not started</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="seg">
+          <button class="on" data-view="board" onclick="setView(this,'board')">▦ Board</button>
+          <button data-view="list" onclick="setView(this,'list')">☰ List</button>
+          <button data-view="cal" onclick="setView(this,'cal')">📅 Calendar</button>
+        </div>
+        <div class="pills">
+          <button class="pill on" onclick="togglePill(this)">All</button>
+          <button class="pill" onclick="togglePill(this)">GST</button>
+          <button class="pill" onclick="togglePill(this)">TDS/TCS</button>
+          <button class="pill" onclick="togglePill(this)">ITR</button>
+          <button class="pill" onclick="togglePill(this)">Audit</button>
+          <button class="pill" onclick="togglePill(this)">ROC</button>
+          <button class="pill" onclick="togglePill(this)">Advisory</button>
+        </div>
+        <select class="fmt" onchange="this.classList.add('on')">
+          <option>FY 2026-27</option>
+          <option>FY 2025-26</option>
+          <option>AY 2026-27</option>
+          <option>All periods</option>
+        </select>
+      </div>
+
+      <div class="legend">
+        <span><b class="sw" style="background:#a0a3ad;"></b> To Do</span>
+        <span><b class="sw" style="background:#1d4ed8;"></b> In Progress</span>
+        <span><b class="sw" style="background:#16a34a;"></b> Done</span>
+        <span><span class="tag filing">GSTR-3B</span> filing type</span>
+        <span><b>⏱ 20 Sep</b> = statutory deadline</span>
+        <span>Auto-generate next month's occurrence on completion</span>
+      </div>
+
+      <!-- ================= BOARD ================= -->
+      <div class="view on" id="view-board">
+        <div class="board">
+
+          <div class="col">
+            <div class="col-head">
+              <span style="width:9px;height:9px;border-radius:50%;background:#a0a3ad;"></span>
+              <h3>To Do</h3>
+              <span class="count-badge">5</span>
+              <span class="grow"></span><span class="mini">⏱ next: Sep 20</span>
+            </div>
+
+            <div class="card">
+              <div class="tag-row">
+                <span class="tag filing">GSTR-3B</span>
+                <span class="tag monthly">Monthly · 20th</span>
+                <span class="tag client">Rathi Traders</span>
+              </div>
+              <h4>File monthly GSTR-3B return</h4>
+              <div class="period">Period: Sep 2026 · FY 2026-27</div>
+              <div class="meta">
+                <span class="due warn">Due 20 Sep · statutory</span>
+                <span class="grow"></span>
+                <span class="prio high" title="High"></span>
+                <span class="avatar" style="background:#7c3aed;">PR</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="tag-row">
+                <span class="tag filing">TDS-RETURN</span>
+                <span class="tag quarterly">Quarterly · 24Q</span>
+                <span class="tag client">Sharma Textiles</span>
+              </div>
+              <h4>File Q2 TDS return (24Q)</h4>
+              <div class="period">Period: Q2 FY 2026-27</div>
+              <div class="meta">
+                <span class="due">Due 31 Oct</span>
+                <span class="grow"></span>
+                <span class="prio high" title="High"></span>
+                <span class="avatar" style="background:#0b6bcb;">RA</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="tag-row">
+                <span class="tag filing">AOC-4</span>
+                <span class="tag annual">Annual · ROC</span>
+                <span class="tag client">Meera Designs Pvt Ltd</span>
+              </div>
+              <h4>AOC-4 financials filing with MCA</h4>
+              <div class="period">Period: FY 2025-26</div>
+              <div class="meta">
+                <span class="due warn">Due 31 Oct</span>
+                <span class="grow"></span>
+                <span class="prio med"></span>
+                <span class="avatar" style="background:#0d9488;">AR</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="tag-row">
+                <span class="tag filing">GST-ADJ</span>
+                <span class="tag client">Krishna &amp; Co</span>
+              </div>
+              <h4>Reconcile input credit — GSTR-2B vs books</h4>
+              <div class="period">Period: Aug 2026</div>
+              <div class="meta">
+                <span class="due">Due 18 Sep</span>
+                <span class="grow"></span>
+                <span class="prio med"></span>
+                <span class="avatar" style="background:#7c3aed;">PR</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="tag-row">
+                <span class="tag filing">ITR</span>
+                <span class="tag client">Rajesh Metals</span>
+              </div>
+              <h4>Follow up on TDS certificates for audit</h4>
+              <div class="period">Period: FY 2025-26</div>
+              <div class="meta">
+                <span class="due">Due 22 Sep</span>
+                <span class="grow"></span>
+                <span class="prio low"></span>
+                <span class="avatar" style="background:#0d9488;">AR</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="col-head">
+              <span style="width:9px;height:9px;border-radius:50%;background:#1d4ed8;"></span>
+              <h3>In Progress</h3>
+              <span class="count-badge">3</span>
+              <span class="grow"></span><span class="mini">1 at risk</span>
+            </div>
+
+            <div class="card">
+              <div class="tag-row">
+                <span class="tag filing">STAT-AUDIT</span>
+                <span class="tag client">Somya Exports Pvt Ltd</span>
+              </div>
+              <h4>Statutory audit — draft financial statements</h4>
+              <div class="period">Period: FY 2025-26 · Fee ₹1,40,000</div>
+              <div class="meta">
+                <span class="due warn">Due 25 Sep</span>
+                <span class="grow"></span>
+                <span class="prio high"></span>
+                <span class="avatar" style="background:#0b6bcb;">RA</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="tag-row">
+                <span class="tag filing">TAX-AUDIT</span>
+                <span class="tag client">Ambika Pharma</span>
+              </div>
+              <h4>Tax audit 3CD — reconcile closing stock</h4>
+              <div class="period">Period: FY 2025-26 · AY 2026-27</div>
+              <div class="meta">
+                <span class="due">Due 30 Sep</span>
+                <span class="grow"></span>
+                <span class="prio high"></span>
+                <span class="avatar" style="background:#0d9488;">AR</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="tag-row">
+                <span class="tag filing">PAYROLL</span>
+                <span class="tag monthly">Monthly · 5th</span>
+              </div>
+              <h4>Book monthly TDS &amp; payroll entries (all clients)</h4>
+              <div class="period">Period: Sep 2026</div>
+              <div class="meta">
+                <span class="due">Due 5 Sep</span>
+                <span class="grow"></span>
+                <span class="prio med"></span>
+                <span class="avatar" style="background:#7c3aed;">PR</span>
+              </div>
+            </div>
+
+            <div class="drag-hint"></div>
+          </div>
+
+          <div class="col">
+            <div class="col-head">
+              <span style="width:9px;height:9px;border-radius:50%;background:#16a34a;"></span>
+              <h3>Done</h3>
+              <span class="count-badge">2</span>
+              <span class="grow"></span><span class="mini">this week</span>
+            </div>
+
+            <div class="card" style="opacity:.75;">
+              <div class="tag-row">
+                <span class="tag filing">GSTR-1</span>
+                <span class="tag client">Rathi Traders</span>
+              </div>
+              <h4>File GSTR-1 (Aug) with HSN summary</h4>
+              <div class="period">Period: Aug 2026</div>
+              <div class="meta">
+                <span class="due">Done 11 Sep</span>
+                <span class="grow"></span>
+                <span class="avatar" style="background:#7c3aed;">PR</span>
+              </div>
+            </div>
+
+            <div class="card" style="opacity:.75;">
+              <div class="tag-row">
+                <span class="tag filing">FEE-INV</span>
+                <span class="tag monthly">Monthly</span>
+              </div>
+              <h4>Send August retainer invoices (18 clients)</h4>
+              <div class="period">Period: Aug 2026</div>
+              <div class="meta">
+                <span class="due">Done 1 Sep</span>
+                <span class="grow"></span>
+                <span class="avatar" style="background:#0b6bcb;">RA</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= LIST ================= -->
+      <div class="view" id="view-list">
+        <div class="list-panel">
+          <div class="group-head">
+            <span class="avatar" style="background:#0b6bcb;">RA</span> Raman <span class="load">· Partner</span>
+            <div class="bar"><i style="width:72%"></i></div>
+            <span class="grow">6 tasks · 2 overdue · 78% capacity</span>
+          </div>
+          <table class="lt">
+            <tbody>
+              <tr>
+                <td style="width:44px;"><span class="check"></span></td>
+                <td><b>Statutory audit — draft financial statements</b> <span class="tag filing" style="margin-left:6px;">AUDIT</span> <span class="tag client">Somya Exports</span></td>
+                <td><span class="tag quarterly">FY 25-26</span></td>
+                <td><span class="status-pill st-prog">In Progress</span></td>
+                <td style="color:var(--red);font-weight:600;">25 Sep</td>
+              </tr>
+              <tr>
+                <td style="width:44px;"><span class="check"></span></td>
+                <td><b>File Q2 TDS return (24Q)</b> <span class="tag filing" style="margin-left:6px;">TDS</span> <span class="tag client">Sharma Textiles</span></td>
+                <td><span class="tag quarterly">Q2 FY 26-27</span></td>
+                <td><span class="status-pill st-todo">To Do</span></td>
+                <td>31 Oct</td>
+              </tr>
+              <tr>
+                <td><span class="check"></span></td>
+                <td><b>Send August retainer invoices</b> <span class="tag monthly">↻ Monthly</span></td>
+                <td><span class="tag monthly">Aug 26</span></td>
+                <td><span class="status-pill st-done">Done</span></td>
+                <td>1 Sep</td>
+              </tr>
+              <tr>
+                <td><span class="check"></span></td>
+                <td><b>Review internal audit observations — Vyom</b></td>
+                <td><span class="tag annual">FY 25-26</span></td>
+                <td><span class="status-pill st-todo">To Do</span></td>
+                <td>12 Sep</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="group-head">
+            <span class="avatar" style="background:#7c3aed;">PR</span> Priya <span class="load">· Senior Associate</span>
+            <div class="bar"><i style="width:56%"></i></div>
+            <span class="grow">5 tasks · 1 overdue · 56% capacity</span>
+          </div>
+          <table class="lt">
+            <tbody>
+              <tr>
+                <td><span class="check"></span></td>
+                <td><b>File monthly GSTR-3B return</b> <span class="tag filing" style="margin-left:6px;">GST</span> <span class="tag client">Rathi Traders</span></td>
+                <td><span class="tag monthly">Sep 26</span></td>
+                <td><span class="status-pill st-todo">To Do</span></td>
+                <td style="color:var(--red);font-weight:600;">20 Sep</td>
+              </tr>
+              <tr>
+                <td><span class="check"></span></td>
+                <td><b>Reconcile input credit — GSTR-2B</b> <span class="tag client" style="margin-left:6px;">Krishna &amp; Co</span></td>
+                <td><span class="tag monthly">Aug 26</span></td>
+                <td><span class="status-pill st-todo">To Do</span></td>
+                <td>18 Sep</td>
+              </tr>
+              <tr>
+                <td><span class="check"></span></td>
+                <td><b>Book monthly TDS entries (all clients)</b> <span class="tag monthly">↻ Monthly</span></td>
+                <td><span class="tag monthly">Sep 26</span></td>
+                <td><span class="status-pill st-prog">In Progress</span></td>
+                <td>5 Sep</td>
+              </tr>
+              <tr>
+                <td><span class="check done"></span></td>
+                <td><b>File GSTR-1 (Aug) with HSN summary</b> <span class="tag client" style="margin-left:6px;">Rathi Traders</span></td>
+                <td><span class="tag monthly">Aug 26</span></td>
+                <td><span class="status-pill st-done">Done</span></td>
+                <td>11 Sep</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ================= CALENDAR ================= -->
+      <div class="view" id="view-cal">
+        <div class="cal-wrap">
+          <div class="cal">
+            <div class="cal-head">
+              <button class="pill">‹</button>
+              <h3>September 2026</h3>
+              <button class="pill">›</button>
+            </div>
+            <div class="cal-grid">
+              <div class="dow">Mon</div><div class="dow">Tue</div><div class="dow">Wed</div><div class="dow">Thu</div><div class="dow">Fri</div><div class="dow">Sat</div><div class="dow">Sun</div>
+              <div class="day other">31</div>
+              <div class="day">1</div>
+              <div class="day">2</div>
+              <div class="day">3</div>
+              <div class="day">4</div>
+              <div class="day">5<div class="markers"><span class="marker tds"></span></div></div>
+              <div class="day">6</div>
+              <div class="day">7</div>
+              <div class="day">8</div>
+              <div class="day">9</div>
+              <div class="day">10<div class="markers"><span class="marker gst"></span></div></div>
+              <div class="day">11</div>
+              <div class="day">12</div>
+              <div class="day">13</div>
+              <div class="day">14</div>
+              <div class="day">15<div class="markers"><span class="marker gst"></span></div></div>
+              <div class="day">16</div>
+              <div class="day">17</div>
+              <div class="day today">18<div class="markers"><span class="marker gst"></span></div></div>
+              <div class="day">19</div>
+              <div class="day">20<div class="markers"><span class="marker gst"></span><span class="marker tds"></span></div></div>
+              <div class="day">21</div>
+              <div class="day">22<div class="markers"><span class="marker itr"></span></div></div>
+              <div class="day">23</div>
+              <div class="day">24</div>
+              <div class="day">25<div class="markers"><span class="marker itr"></span></div></div>
+              <div class="day">26</div>
+              <div class="day">27</div>
+              <div class="day">28</div>
+              <div class="day">29</div>
+              <div class="day">30<div class="markers"><span class="marker itr"></span></div></div>
+              <div class="day other">1</div>
+            </div>
+            <div class="hint">
+              Marker legend — <span class="marker gst" style="display:inline-block;vertical-align:middle;"></span> GST filing ·
+              <span class="marker tds" style="display:inline-block;vertical-align:middle;"></span> TDS / payroll ·
+              <span class="marker itr" style="display:inline-block;vertical-align:middle;"></span> ITR / tax audit ·
+              <span class="marker roc" style="display:inline-block;vertical-align:middle;"></span> ROC.
+              Marking an occurrence done rolls it to next month automatically.
+            </div>
+          </div>
+
+          <div class="upcoming">
+            <div class="up-panel">
+              <h3>Statutory deadlines this month</h3>
+              <div class="up-item">
+                <div class="up-date due"><b>20</b>Sep</div>
+                <div><b>GSTR-3B (Sep)</b><br><span style="color:var(--muted);font-size:12px;">18 clients · Priya · High</span></div>
+              </div>
+              <div class="up-item">
+                <div class="up-date"><b>25</b>Sep</div>
+                <div><b>Statutory audit — financials due</b><br><span style="color:var(--muted);font-size:12px;">Somya Exports · Raman · High</span></div>
+              </div>
+              <div class="up-item">
+                <div class="up-date"><b>30</b>Sep</div>
+                <div><b>Advance tax — Q2 instalment</b><br><span style="color:var(--muted);font-size:12px;">9 corporate clients</span></div>
+              </div>
+              <div class="up-item">
+                <div class="up-date"><b>30</b>Sep</div>
+                <div><b>Tax audit 3CD draft</b><br><span style="color:var(--muted);font-size:12px;">Ambika Pharma · Arjun · High</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ================= NEW TASK MODAL ================= -->
+<div class="overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2>New Task</h2>
+    <p class="sub">One-off, or link it to a filing/service — completion auto-creates the next occurrence.</p>
+
+    <div class="frow">
+      <label>Task title</label>
+      <input placeholder="e.g. File monthly GSTR-3B return" />
+    </div>
+
+    <div class="grid2">
+      <div class="frow">
+        <label>Filing / service type</label>
+        <select>
+          <option>— None (general task) —</option>
+          <option selected>GST Registration &amp; Filing</option>
+          <option>TDS / TCS Compliance</option>
+          <option>Income Tax Return Filing (ITR)</option>
+          <option>Statutory Audit</option>
+          <option>Tax Audit</option>
+          <option>ROC Compliance</option>
+          <option>Payroll Processing</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label>Client (optional)</label>
+        <input placeholder="e.g. Rathi Traders" />
+      </div>
+    </div>
+
+    <div class="grid3">
+      <div class="frow">
+        <label>Period</label>
+        <select>
+          <option>—</option>
+          <option selected>Sep 2026 · FY 26-27</option>
+          <option>Q2 FY 26-27</option>
+          <option>FY 2025-26</option>
+          <option>AY 2026-27</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label>Due date</label>
+        <input type="date" value="2026-09-20" />
+      </div>
+      <div class="frow">
+        <label>Priority</label>
+        <select><option>Low</option><option selected>Medium</option><option>High</option></select>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="frow">
+        <label>Assign to</label>
+        <select><option>Raman</option><option selected>Priya</option><option>Arjun</option></select>
+      </div>
+      <div class="frow">
+        <label>Fee (₹) <span style="font-weight:400;color:var(--muted);">optional</span></label>
+        <input type="number" placeholder="Pre-fills from service card" />
+      </div>
+    </div>
+
+    <div class="frow">
+      <label>
+        Recurrence
+        <span style="font-weight:400;color:var(--muted);"> — leave "None" for a one-time task</span>
+      </label>
+      <select>
+        <option>None (one-time)</option>
+        <option selected>Monthly</option>
+        <option>Quarterly</option>
+        <option>Yearly</option>
+        <option>Weekly</option>
+      </select>
+    </div>
+
+    <div class="recur-box">
+      <div class="icon">🔁</div>
+      <div>
+        <b>Monthly chosen</b>
+        <p>Repeats on the <b>20th</b> of every month (matches the service due rule). Completing an occurrence
+        automatically creates next month's. You can pause or end the schedule on a future date.</p>
+      </div>
+    </div>
+
+    <div class="frow" style="margin-top:12px;">
+      <label>Description</label>
+      <textarea rows="2" placeholder="Reminder, checklist, or text to include in the client WhatsApp request..."></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="closeModal()">Create Task</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function setView(btn, view) {
+    document.querySelectorAll('.seg button').forEach((b) => b.classList.remove('on'));
+    btn.classList.add('on');
+    document.querySelectorAll('.view').forEach((v) => v.classList.remove('on'));
+    document.getElementById('view-' + view)?.classList.add('on');
+  }
+  function togglePill(btn) {
+    document.querySelectorAll('.pills')[0].querySelectorAll('.pill').forEach((p) => p.classList.remove('on'));
+    btn.classList.add('on');
+  }
+  function openModal() { document.getElementById('modal').classList.add('show'); }
+  function closeModal() { document.getElementById('modal').classList.remove('show'); }
+</script>
+
+</body>
+</html>

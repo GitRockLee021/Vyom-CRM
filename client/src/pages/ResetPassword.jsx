@@ -54,7 +54,7 @@ export default function ResetPassword() {
           </div>
         </div>
 
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-[0_2px_4px_rgba(0,0,0,0.05)]">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-card">
           <h2 className="font-headline-md text-headline-md text-on-surface mb-1">Set a new password</h2>
           <p className="font-body-md text-body-md text-on-surface-variant mb-6">
             Choose a new password for your account. It must be at least 8 characters.

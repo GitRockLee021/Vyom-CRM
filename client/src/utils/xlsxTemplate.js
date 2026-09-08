@@ -92,10 +92,10 @@ function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const HEADERS = ['Name', 'Assessee Type', 'Email', 'Phone', 'City', 'Status'];
+const HEADERS = ['Name', 'Assessee Type', 'Email', 'Phone', 'City', 'Status', 'Services'];
 const EXAMPLES = [
-  ['Aarav Sharma', 'Individual', 'aarav.s@example.com', '+91 98765 43210', 'Mumbai', 'Active'],
-  ['GreenTech Solutions', 'Private Limited', 'contact@greentech.co.in', '+91 11 2345 6789', 'New Delhi', 'Inactive'],
+  ['Aarav Sharma', 'Individual', 'aarav.s@example.com', '+91 98765 43210', 'Mumbai', 'Active', 'GST Filing'],
+  ['GreenTech Solutions', 'Private Limited', 'contact@greentech.co.in', '+91 11 2345 6789', 'New Delhi', 'Inactive', 'ITR Filing, Bookkeeping'],
 ];
 const TYPE_LIST = 'Individual,Proprietor,Partnership,Private Limited,LLP,Others';
 const STATUS_LIST = 'Active,Inactive';
@@ -127,6 +127,7 @@ function buildSheetXml() {
 <col min="4" max="4" width="20" customWidth="1"/>
 <col min="5" max="5" width="16" customWidth="1"/>
 <col min="6" max="6" width="12" customWidth="1"/>
+<col min="7" max="7" width="22" customWidth="1"/>
 </cols>
 <sheetData>${rows.join('')}</sheetData>
 <dataValidations count="2">

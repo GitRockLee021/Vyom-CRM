@@ -61,6 +61,7 @@ export default function RecordPayment() {
   const [clientInvoices, setClientInvoices] = useState([]);
   const [loadingClientInvoices, setLoadingClientInvoices] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [highlightedIdx, setHighlightedIdx] = useState(-1);
 
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState('');
@@ -135,6 +136,26 @@ export default function RecordPayment() {
   function selectClient(c) {
     setSelectedClient(c);
     setClientSearch('');
+    setHighlightedIdx(-1);
+  }
+
+  function handleClientSearchKeyDown(e) {
+    if (!filteredClients.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIdx((i) => (i + 1) % filteredClients.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIdx((i) => (i <= 0 ? filteredClients.length - 1 : i - 1));
+    } else if (e.key === 'Enter') {
+      const item = highlightedIdx >= 0 ? filteredClients[highlightedIdx] : null;
+      if (item) {
+        e.preventDefault();
+        selectClient(item);
+      }
+    } else if (e.key === 'Escape') {
+      setHighlightedIdx(-1);
+    }
   }
 
   function toggleInvoice(invId) {
@@ -215,7 +236,7 @@ export default function RecordPayment() {
                 {/* Left Column */}
                 <div className="lg:col-span-8 flex flex-col gap-stack-md">
                   {isSingle && invoice ? (
-                    <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
+                    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-card">
                       <div>
                         <div className="font-label-md text-label-md text-on-surface-variant uppercase mb-1">Client</div>
                         <div className="font-body-lg text-body-lg font-semibold text-on-surface">{invoice.client_name}</div>
@@ -233,7 +254,7 @@ export default function RecordPayment() {
                     </div>
                   ) : (
                     <>
-                      <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md shadow-sm">
+                      <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-md shadow-card">
                         <label className="block font-label-md text-label-md text-on-surface-variant mb-2">Search Client</label>
                         <div className="relative max-w-md">
                           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant">search</span>
@@ -242,7 +263,8 @@ export default function RecordPayment() {
                             placeholder="Start typing client name..."
                             type="text"
                             value={selectedClient ? selectedClient.name : clientSearch}
-                            onChange={(e) => { if (selectedClient) setSelectedClient(null); setClientSearch(e.target.value); }}
+                            onChange={(e) => { if (selectedClient) setSelectedClient(null); setClientSearch(e.target.value); setHighlightedIdx(-1); }}
+                            onKeyDown={handleClientSearchKeyDown}
                           />
                           {selectedClient && (
                             <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-primary">check_circle</span>
@@ -250,9 +272,14 @@ export default function RecordPayment() {
                         </div>
                         {!selectedClient && filteredClients.length > 0 && (
                           <ul className="mt-2 border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant max-h-56 overflow-y-auto max-w-md">
-                            {filteredClients.map((c) => (
+                            {filteredClients.map((c, idx) => (
                               <li key={c.id}>
-                                <button type="button" className="w-full text-left px-3 py-2 hover:bg-surface-container-low transition-colors" onClick={() => selectClient(c)}>
+                                <button
+                                  type="button"
+                                  className={`w-full text-left px-3 py-2 transition-colors ${idx === highlightedIdx ? 'bg-primary/10' : 'hover:bg-surface-container-low'}`}
+                                  onMouseEnter={() => setHighlightedIdx(idx)}
+                                  onClick={() => selectClient(c)}
+                                >
                                   <span className="block font-body-md text-body-md text-on-surface">{c.name}</span>
                                   {c.city && <span className="block text-xs text-on-surface-variant">{c.city}{c.state ? `, ${c.state}` : ''}</span>}
                                 </button>
@@ -263,7 +290,7 @@ export default function RecordPayment() {
                       </div>
 
                       {selectedClient && (
-                        <div className="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+                        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-card">
                           <div className="px-stack-md py-4 border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
                             <h3 className="font-headline-md text-headline-md text-on-surface">Pending Invoices for {selectedClient.name}</h3>
                             <span className="font-label-md text-label-md text-on-surface-variant bg-surface-container-highest px-2 py-1 rounded">{clientInvoices.length} Found</span>
@@ -293,6 +320,7 @@ export default function RecordPayment() {
                                           className="rounded border-outline-variant text-primary focus:ring-primary"
                                           checked={selectedIds.includes(inv.id)}
                                           onChange={() => toggleInvoice(inv.id)}
+                                          onClick={(e) => e.stopPropagation()}
                                         />
                                       </td>
                                       <td className="p-4 text-primary font-medium">{inv.invoice_number}</td>
@@ -312,7 +340,7 @@ export default function RecordPayment() {
 
                   {/* Payment Details Form */}
                   <form id="payment-form" onSubmit={handleSubmit}>
-                    <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack-md shadow-sm">
+                    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-md shadow-card">
                       <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md border-b border-outline-variant pb-2">Payment Details</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
                         <div>
@@ -341,7 +369,7 @@ export default function RecordPayment() {
                 {/* Right Column */}
                 <div className="lg:col-span-4">
                   <div className="sticky top-20 flex flex-col gap-stack-md">
-                    <div className="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+                    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-card">
                       <div className="px-stack-md py-4 border-b border-outline-variant bg-surface-container-low">
                         <h3 className="font-headline-md text-headline-md text-on-surface">Balance Tracking</h3>
                       </div>
@@ -390,7 +418,7 @@ export default function RecordPayment() {
                         type="submit"
                         form="payment-form"
                         disabled={saving}
-                        className="w-full bg-primary text-on-primary font-label-md text-label-md py-3 rounded flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                        className="w-full bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
                       >
                         <span className="material-symbols-outlined text-[18px]">payments</span>
                         {saving ? 'Recording…' : 'Record Payment'}
@@ -398,7 +426,7 @@ export default function RecordPayment() {
                       <button
                         type="button"
                         onClick={() => navigate(isSingle ? `/invoice/${id}` : '/invoices')}
-                        className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface-variant font-label-md text-label-md py-3 rounded flex items-center justify-center hover:bg-surface-container transition-colors"
+                        className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface-variant font-label-md text-label-md py-3 rounded-lg flex items-center justify-center hover:bg-surface-container transition-colors"
                       >
                         Cancel
                       </button>

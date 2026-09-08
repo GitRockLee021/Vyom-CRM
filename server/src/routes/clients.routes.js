@@ -3,6 +3,7 @@ import { query, pool } from '../config/db.js';
 import { httpError } from '../utils/http-error.js';
 import { assertUserInTenant } from '../utils/member-check.js';
 import { requirePerm } from '../middleware/auth.middleware.js';
+import { syncTasksForClient } from '../utils/task-gen.js';
 
 const router = Router();
 
@@ -39,6 +40,9 @@ async function syncServices(client, clientId, serviceIds, tenantId) {
   const ids = Array.isArray(serviceIds)
     ? [...new Set(serviceIds.map((s) => String(s).trim()).filter(Boolean))]
     : [];
+  if (!ids.length) {
+    throw httpError(400, 'At least one service must be selected');
+  }
   if (ids.length) {
     const { rows } = await client.query(
       'SELECT id FROM services WHERE id = ANY($1::uuid[]) AND tenant_id = $2',
@@ -151,6 +155,13 @@ router.post('/', requirePerm('clients.create'), async (req, res, next) => {
       [client.id]
     );
     await pg.query('COMMIT');
+
+    try {
+      await syncTasksForClient(client.id, req.user.tenant_id, req.user.id);
+    } catch (taskErr) {
+      console.error('[clients] task sync warning:', taskErr.message);
+    }
+
     res.status(201).json(rows[0]);
   } catch (err) {
     await pg.query('ROLLBACK').catch(() => {});
@@ -170,16 +181,19 @@ router.put('/:id', requirePerm('clients.edit'), async (req, res, next) => {
     if (data.assigned_to) await assertUserInTenant(data.assigned_to, req.user.tenant_id);
 
     const keys = Object.keys(data);
-    if (!keys.length) throw httpError(400, 'No valid fields provided');
+    if (!keys.length && req.body?.service_ids === undefined) throw httpError(400, 'No valid fields provided');
 
-    const sets = keys.map((key, i) => `${key} = $${i + 1}`);
-    const values = [...Object.values(data), req.params.id, req.user.tenant_id];
+    const onlyServices = keys.length === 0 && req.body?.service_ids !== undefined;
+    if (!onlyServices) {
+      const sets = keys.map((key, i) => `${key} = $${i + 1}`);
+      const values = [...Object.values(data), req.params.id, req.user.tenant_id];
 
-    const updated = await pg.query(
-      `UPDATE clients SET ${sets.join(', ')} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING *`,
-      values
-    );
-    if (!updated.rows[0]) throw httpError(404, 'Client not found');
+      const updated = await pg.query(
+        `UPDATE clients SET ${sets.join(', ')} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING *`,
+        values
+      );
+      if (!updated.rows[0]) throw httpError(404, 'Client not found');
+    }
 
     if (req.body?.service_ids !== undefined) {
       await syncServices(pg, req.params.id, req.body.service_ids, req.user.tenant_id);
@@ -190,6 +204,17 @@ router.put('/:id', requirePerm('clients.edit'), async (req, res, next) => {
       [req.params.id]
     );
     await pg.query('COMMIT');
+
+    // After the client/services update is committed, generate tasks for newly
+    // opted-in services and flag tasks for any service that was removed.
+    if (req.body?.service_ids !== undefined) {
+      try {
+        await syncTasksForClient(req.params.id, req.user.tenant_id, req.user.id);
+      } catch (taskErr) {
+        console.error('[clients] task sync warning:', taskErr.message);
+      }
+    }
+
     res.json(rows[0]);
   } catch (err) {
     await pg.query('ROLLBACK').catch(() => {});

@@ -16,11 +16,8 @@ function pickFields(body) {
 }
 
 function validate(data, { partial = false } = {}) {
-  if (!partial && (!data.code?.trim() || !data.name?.trim())) {
-    throw httpError(400, 'code and name are required');
-  }
-  if (data.category && !['taxation', 'compliance', 'advisory', 'audit', 'registration', 'other'].includes(data.category)) {
-    throw httpError(400, 'invalid category');
+  if (!partial && !data.name?.trim()) {
+    throw httpError(400, 'name is required');
   }
 }
 
