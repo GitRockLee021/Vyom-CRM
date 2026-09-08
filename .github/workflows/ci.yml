@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-unit:
+    name: Build + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Build client + server
+        run: npm run build
+      - name: Unit tests (incl. authHeader regression)
+        run: node --test client/src/utils/authHeader.test.mjs
+
+  api-integration:
+    name: API integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vyom_crm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/vyom_crm_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install psql client
+        run: sudo apt-get install -y postgresql-client
+      - name: Load schema (baseline + migrations in order)
+        run: |
+          set -e
+          PGPASSWORD=postgres psql -h localhost -U postgres -d vyom_crm_test -v ON_ERROR_STOP=1 -f database/schema.sql
+          for f in database/migrations/*.sql; do
+            echo "Applying $f"
+            PGPASSWORD=postgres psql -h localhost -U postgres -d vyom_crm_test -v ON_ERROR_STOP=1 -f "$f"
+          done
+      - name: Run tests
+        run: npm test
+        env:
+          PORT: '5199'
