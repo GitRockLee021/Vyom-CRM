@@ -66,6 +66,18 @@ function waLink(client) {
 
 const EMPTY_FORM = { name: '', client_type: 'individual', email: '', phone: '', status: 'active' };
 
+async function handleDownloadTemplate() {
+  let names = [];
+  try {
+    const res = await fetch('/api/services', { headers: authHeaders() });
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (Array.isArray(json)) names = json.map((s) => s.name).filter(Boolean);
+    }
+  } catch { /* fall back to no services drop-down */ }
+  downloadClientsTemplate(names);
+}
+
 async function api(method, path, body) {
   const res = await fetch(`/api${path}`, {
     method,
@@ -697,7 +709,7 @@ export default function Clients() {
           <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card-lg w-full max-w-md p-container-padding" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Import Clients</h3>
             <p className="font-body-md text-body-md text-on-surface-variant mb-stack-md">
-              Download the Excel template below — it has dropdown lists for Assessee Type and Status. Fill it in and upload the file.
+              Download the Excel template below — it has dropdown lists for Assessee Type, Status and Services. Fill it in and upload the file.
             </p>
             <p className="font-data-mono text-data-mono text-on-surface bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 mb-stack-md">
               Name, Assessee Type, Email, Phone, City, Status, Services (optional)
@@ -705,14 +717,14 @@ export default function Clients() {
             <ul className="font-body-md text-body-md text-on-surface-variant mb-stack-lg list-disc pl-5 space-y-1">
               <li>Assessee Type: Individual, Proprietor, Partnership, LLP, Private Limited, or Others</li>
               <li>Status (optional): Active or Inactive — left blank, clients are created as Active</li>
-              <li>Services (optional): service names separated by commas — must match services set up in Settings. Left blank, each imported client is assigned to your first available service.</li>
+              <li>Services (optional): pick from the drop-down — these match the services set up in Settings. Leave blank and each imported client is assigned to your first available service.</li>
               <li>Only "Name" is required in each row.</li>
             </ul>
             <div className="flex flex-col sm:flex-row justify-end gap-3">
               <button
                 type="button"
                 className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low flex items-center justify-center gap-2"
-                onClick={downloadClientsTemplate}
+                onClick={handleDownloadTemplate}
               >
                 <span className="material-symbols-outlined text-[18px]">download</span>
                 Download Excel Template

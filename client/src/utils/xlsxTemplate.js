@@ -1,6 +1,9 @@
 // Minimal dependency-free .xlsx generator (ZIP with STORED entries + SpreadsheetML).
 // Produces a clients import template with Excel list-dropdowns on the
-// Assessee Type and Status columns.
+// Assessee Type, Status and Services columns. The Services options come from
+// the tenant's configured services (fetched at download time); they are stored
+// on a hidden lookup sheet so the list is not limited by Excel's 255-char
+// inline formula cap.
 
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -99,6 +102,8 @@ const EXAMPLES = [
 ];
 const TYPE_LIST = 'Individual,Proprietor,Partnership,Private Limited,LLP,Others';
 const STATUS_LIST = 'Active,Inactive';
+const SERVICE_LIST_SHEET = 'ServiceList';
+const SERVICE_MAX = 100; // dropdown rows reserved on the lookup sheet
 
 function colLetter(i) {
   return String.fromCharCode(65 + i);
@@ -112,12 +117,23 @@ function row(n, values) {
   return `<row r="${n}">${values.map((v, i) => cell(`${colLetter(i)}${n}`, v)).join('')}</row>`;
 }
 
-function buildSheetXml() {
+function buildSheetXml(serviceNames) {
+  const services = Array.isArray(serviceNames) ? serviceNames.filter((n) => n && String(n).trim()) : [];
   const rows = [
     row(1, HEADERS),
     ...EXAMPLES.map((values, idx) => row(idx + 2, values)),
   ];
   const lastRow = EXAMPLES.length + 500;
+  const validations = [
+    `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="B2:B${lastRow}"><formula1>"${TYPE_LIST}"</formula1></dataValidation>`,
+    `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="F2:F${lastRow}"><formula1>"${STATUS_LIST}"</formula1></dataValidation>`,
+  ];
+  if (services.length) {
+    const range = Math.min(services.length, SERVICE_MAX);
+    validations.push(
+      `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="G2:G${lastRow}"><formula1>'${SERVICE_LIST_SHEET}'!$A$2:$A$${range + 1}</formula1></dataValidation>`,
+    );
+  }
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <cols>
@@ -130,14 +146,27 @@ function buildSheetXml() {
 <col min="7" max="7" width="22" customWidth="1"/>
 </cols>
 <sheetData>${rows.join('')}</sheetData>
-<dataValidations count="2">
-<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="B2:B${lastRow}"><formula1>"${TYPE_LIST}"</formula1></dataValidation>
-<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="F2:F${lastRow}"><formula1>"${STATUS_LIST}"</formula1></dataValidation>
+<dataValidations count="${validations.length}">
+${validations.join('\n')}
 </dataValidations>
 </worksheet>`;
 }
 
-export function buildClientsTemplateBytes() {
+function buildServiceListSheetXml(serviceNames) {
+  const services = Array.isArray(serviceNames) ? serviceNames.filter((n) => n && String(n).trim()) : [];
+  const rows = [row(1, ['Services Name'])];
+  services.slice(0, SERVICE_MAX).forEach((n, idx) => rows.push(row(idx + 2, [n])));
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<cols>
+<col min="1" max="1" width="30" customWidth="1"/>
+</cols>
+<sheetData>${rows.join('')}</sheetData>
+</worksheet>`;
+}
+
+export function buildClientsTemplateBytes(serviceNames) {
+  const hasServices = Array.isArray(serviceNames) && serviceNames.some((n) => n && String(n).trim());
   const entries = [
     {
       name: '[Content_Types].xml',
@@ -147,6 +176,7 @@ export function buildClientsTemplateBytes() {
 <Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
 <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+${hasServices ? '<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' : ''}
 </Types>`,
     },
     {
@@ -160,7 +190,7 @@ export function buildClientsTemplateBytes() {
       name: 'xl/workbook.xml',
       data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="Clients" sheetId="1" r:id="rId1"/></sheets>
+<sheets><sheet name="Clients" sheetId="1" r:id="rId1"/>${hasServices ? `<sheet name="${SERVICE_LIST_SHEET}" sheetId="2" r:id="rId2" state="hidden"/>` : ''}</sheets>
 </workbook>`,
     },
     {
@@ -168,18 +198,20 @@ export function buildClientsTemplateBytes() {
       data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+${hasServices ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>' : ''}
 </Relationships>`,
     },
     {
       name: 'xl/worksheets/sheet1.xml',
-      data: buildSheetXml(),
+      data: buildSheetXml(serviceNames),
     },
   ];
+  if (hasServices) entries.push({ name: 'xl/worksheets/sheet2.xml', data: buildServiceListSheetXml(serviceNames) });
   return zipStore(entries);
 }
 
-export function downloadClientsTemplate() {
-  const bytes = buildClientsTemplateBytes();
+export function downloadClientsTemplate(serviceNames) {
+  const bytes = buildClientsTemplateBytes(serviceNames);
   const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
