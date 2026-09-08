@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../hooks/useSettings.js';
-import HealthBadge from './HealthBadge.jsx';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: 'dashboard', end: true },
@@ -222,7 +221,6 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
-            <HealthBadge className="hidden md:flex" />
             <button
               type="button"
               className="relative p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80"
