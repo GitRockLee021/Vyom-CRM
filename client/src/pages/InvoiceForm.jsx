@@ -39,7 +39,7 @@ export default function InvoiceForm() {
   const can = usePerm();
   const { id } = useParams();
   const isEdit = Boolean(id);
-  const { data } = useFetch('/clients');
+  const { data } = useFetch('/clients', { cached: true });
   const { data: serviceData } = useFetch('/services');
   const services = Array.isArray(serviceData) ? serviceData : [];
 

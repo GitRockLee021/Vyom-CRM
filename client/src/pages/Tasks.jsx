@@ -139,7 +139,7 @@ export default function Tasks() {
 
   const svcList = useServices();
 
-  const { data: clients } = useFetch('/clients');
+  const { data: clients } = useFetch('/clients', { cached: true });
   const clientList = Array.isArray(clients) ? clients : [];
   const countBySvc = {};
   clientList.forEach((c) => (c.services || []).forEach((s) => {

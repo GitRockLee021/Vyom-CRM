@@ -207,7 +207,7 @@ export async function generateTasksForService(clientId, service, tenantId, actor
 
   const { rows: createdRows } = await query(
     `INSERT INTO tasks (tenant_id, client_id, engagement_id, title, period, due_date)
-     SELECT $1::uuid, $2::uuid, $3::uuid, u.title, u.period, u.due_date
+     SELECT $1::int4, $2::uuid, $3::uuid, u.title, u.period, u.due_date
      FROM unnest($4::text[], $5::text[], $6::date[]) AS u(title, period, due_date)
      RETURNING id, title, period`,
     [

@@ -50,7 +50,7 @@ export default function RecordPayment() {
   const { id } = useParams();
   const isSingle = Boolean(id);
 
-  const { data: clientsData } = useFetch('/clients');
+  const { data: clientsData } = useFetch('/clients', { cached: true });
   const clients = Array.isArray(clientsData) ? clientsData : [];
 
   const [invoice, setInvoice] = useState(null);

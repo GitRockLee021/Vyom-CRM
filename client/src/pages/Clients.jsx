@@ -121,7 +121,7 @@ export default function Clients() {
   const navigate = useNavigate();
   const location = useLocation();
   const can = usePerm();
-  const { data, error, loading, reload } = useFetch('/clients');
+  const { data, error, loading, reload } = useFetch('/clients', { cached: true });
   const cachedServices = useServices();
 
   const [listInit] = useState(() => loadListState('clients_list'));
