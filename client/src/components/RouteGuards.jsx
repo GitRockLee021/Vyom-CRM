@@ -9,7 +9,7 @@ export function RequireAuth({ children }) {
   if (initializing) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <span className="material-symbols-outlined text-primary text-[32px] animate-spin">progress_activity</span>
+        <span className="inline-block h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -28,7 +28,7 @@ export function RedirectIfAuthed({ children }) {
   if (initializing) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <span className="material-symbols-outlined text-primary text-[32px] animate-spin">progress_activity</span>
+        <span className="inline-block h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
