@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { usePerm } from '../hooks/usePerm.js';
+import { useServices } from '../hooks/useServices.js';
+import Pagination from '../components/Pagination.jsx';
+import { loadListState, saveListState } from '../utils/listState.js';
 import { authHeaders } from '../utils/authHeader.js';
 import { downloadClientsTemplate } from '../utils/xlsxTemplate.js';
-import * as XLSX from 'xlsx';
 
 const PAGE_SIZE = 5;
 
@@ -66,15 +68,8 @@ function waLink(client) {
 
 const EMPTY_FORM = { name: '', client_type: 'individual', email: '', phone: '', status: 'active' };
 
-async function handleDownloadTemplate() {
-  let names = [];
-  try {
-    const res = await fetch('/api/services', { headers: authHeaders() });
-    if (res.ok) {
-      const json = await res.json().catch(() => null);
-      if (Array.isArray(json)) names = json.map((s) => s.name).filter(Boolean);
-    }
-  } catch { /* fall back to no services drop-down */ }
+async function handleDownloadTemplate(services) {
+  const names = (Array.isArray(services) ? services : []).map((s) => s.name).filter(Boolean);
   downloadClientsTemplate(names);
 }
 
@@ -127,10 +122,12 @@ export default function Clients() {
   const location = useLocation();
   const can = usePerm();
   const { data, error, loading, reload } = useFetch('/clients');
+  const cachedServices = useServices();
 
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [page, setPage] = useState(1);
+  const [listInit] = useState(() => loadListState('clients_list'));
+  const [search, setSearch] = useState(listInit.search || '');
+  const [statusFilter, setStatusFilter] = useState(listInit.statusFilter || '');
+  const [page, setPage] = useState(listInit.page || 1);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
@@ -147,7 +144,16 @@ export default function Clients() {
 
   const clients = Array.isArray(data) ? data : [];
 
-  useEffect(() => { setPage(1); }, [search, statusFilter]);
+  const prevFilter = useRef({ search, statusFilter });
+  useEffect(() => {
+    if (prevFilter.current.search === search && prevFilter.current.statusFilter === statusFilter) return;
+    prevFilter.current = { search, statusFilter };
+    setPage(1);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    saveListState('clients_list', { page, search, statusFilter });
+  }, [page, search, statusFilter]);
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -199,18 +205,6 @@ export default function Clients() {
   const safePage = Math.min(page, totalPages);
   const start = (safePage - 1) * PAGE_SIZE;
   const rows = filtered.slice(start, start + PAGE_SIZE);
-
-  function pageList(total, current) {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-    const wanted = new Set([1, 2, total, current - 1, current, current + 1].filter((p) => p >= 1 && p <= total));
-    const sorted = [...wanted].sort((a, b) => a - b);
-    const out = [];
-    sorted.forEach((p, i) => {
-      if (i && p - sorted[i - 1] > 1) out.push('…');
-      out.push(p);
-    });
-    return out;
-  }
 
   function openAdd() { setForm(EMPTY_FORM); setFormError(''); setModal({ mode: 'add' }); }
 
@@ -290,6 +284,7 @@ export default function Clients() {
       try {
         const name = file.name.toLowerCase();
         if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+          const XLSX = await import('xlsx');
           const data = await file.arrayBuffer();
           const wb = XLSX.read(data, { type: 'array' });
           const ws = wb.Sheets[wb.SheetNames[0]];
@@ -322,14 +317,7 @@ export default function Clients() {
       .map((h, idx) => (/^service\s*\d+$/i.test(h) && h !== 'service' ? idx : -1))
       .filter((idx) => idx >= 0);
 
-    let services = [];
-    try {
-      const res = await fetch('/api/services', { headers: authHeaders() });
-      if (res.ok) {
-        const json = await res.json().catch(() => null);
-        services = Array.isArray(json) ? json : [];
-      }
-    } catch { /* services stay empty */ }
+    const services = cachedServices || [];
     const byName = new Map();
     services.forEach((s) => byName.set(String(s.name || '').trim().toLowerCase(), s.id));
     const byId = new Map();
@@ -526,9 +514,6 @@ export default function Clients() {
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                 </select>
-                <span className="ml-auto text-sm text-on-surface-variant whitespace-nowrap">
-                  Showing {filtered.length ? `${start + 1}–${Math.min(start + PAGE_SIZE, filtered.length)}` : '0'} of {filtered.length} clients
-                </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -638,43 +623,14 @@ export default function Clients() {
               </div>
 
               {/* Pagination */}
-              <div className="px-6 py-4 border-t border-outline-variant bg-surface-container-lowest flex items-center justify-between">
-                <span className="font-body-md text-body-md text-on-surface-variant">
-                  Showing {filtered.length ? start + 1 : 0} to {Math.min(start + PAGE_SIZE, filtered.length)} of {filtered.length} clients
-                </span>
-                <div className="flex items-center space-x-1">
-                  <button
-                    type="button"
-                    disabled={safePage <= 1}
-                    className="px-3 py-1 border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container-low font-label-md text-label-md disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={() => setPage(safePage - 1)}
-                  >
-                    Previous
-                  </button>
-                  {pageList(totalPages, safePage).map((p, i) =>
-                    p === '…' ? (
-                      <span key={`gap-${i}`} className="px-2 text-on-surface-variant">…</span>
-                    ) : (
-                      <button
-                        key={p}
-                        type="button"
-                        className={`px-3 py-1 rounded font-label-md text-label-md ${p === safePage ? 'bg-primary text-white border border-primary' : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'}`}
-                        onClick={() => setPage(p)}
-                      >
-                        {p}
-                      </button>
-                    )
-                  )}
-                  <button
-                    type="button"
-                    disabled={safePage >= totalPages}
-                    className="px-3 py-1 border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container-low font-label-md text-label-md disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={() => setPage(safePage + 1)}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+              <Pagination
+                page={safePage}
+                totalPages={totalPages}
+                totalItems={filtered.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+                label="clients"
+              />
             </div>
           </div>
         </div>
@@ -781,7 +737,7 @@ export default function Clients() {
               <button
                 type="button"
                 className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low flex items-center justify-center gap-2"
-                onClick={handleDownloadTemplate}
+                onClick={() => handleDownloadTemplate(cachedServices)}
               >
                 <span className="material-symbols-outlined text-[18px]">download</span>
                 Download Excel Template

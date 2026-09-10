@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { usePerm } from '../hooks/usePerm.js';
+import { useTeam } from '../hooks/useTeam.js';
+import { useServices } from '../hooks/useServices.js';
 import AccessDenied from '../components/AccessDenied.jsx';
 import { authHeaders } from '../utils/authHeader.js';
 import ServicesOpted, { servicePlan } from '../components/ServicesOpted.jsx';
@@ -42,31 +44,11 @@ export default function ClientForm({ quick = false }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
-  const [members, setMembers] = useState([]);
-  const [services, setServices] = useState([]);
+  const teamData = useTeam();
+  const services = useServices();
+  const members = Array.isArray(teamData?.members) ? teamData.members.filter((m) => m.is_active) : [];
   const [serviceIds, setServiceIds] = useState([]);
   const [moreOpen, setMoreOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [teamRes, servicesRes] = await Promise.all([
-          fetch('/api/team', { headers: authHeaders() }),
-          fetch('/api/services', { headers: authHeaders() }),
-        ]);
-        const team = await teamRes.json().catch(() => null);
-        const svc = await servicesRes.json().catch(() => null);
-        if (!cancelled) {
-          if (team?.members) setMembers(team.members.filter((m) => m.is_active));
-          if (Array.isArray(svc)) setServices(svc);
-        }
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   useEffect(() => {
     if (!isEdit) return undefined;

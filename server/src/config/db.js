@@ -20,6 +20,9 @@ console.log(`[db] connecting to ${describeTarget(connectionString)}`);
 
 const pool = new Pool({
   connectionString,
+  max: parseInt(process.env.PG_POOL_MAX || '10', 10),
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
   ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
 });
 

@@ -15,15 +15,31 @@ router.get('/summary', requirePerm('billing.view'), async (req, res, next) => {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
 
-    // --- Clients ---
-    const clients = await query(
-      `SELECT COUNT(*)::int AS total,
-              COUNT(*) FILTER (WHERE created_at >= $2)::int AS this_month,
-              COUNT(*) FILTER (WHERE created_at >= $3 AND created_at < $2)::int AS last_month
-       FROM clients
-       WHERE tenant_id = $1`,
-      [tenantId, monthStart, prevMonthStart],
-    );
+    // --- Clients / Revenue / Invoices (independent queries, run in parallel) ---
+    const [clients, revenue, invoices] = await Promise.all([
+      query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE created_at >= $2)::int AS this_month,
+                COUNT(*) FILTER (WHERE created_at >= $3 AND created_at < $2)::int AS last_month
+         FROM clients
+         WHERE tenant_id = $1`,
+        [tenantId, monthStart, prevMonthStart],
+      ),
+      query(
+        `SELECT COALESCE(SUM(i.amount * (1 + i.gst_rate / 100)), 0)::numeric AS revenue,
+                COUNT(DISTINCT i.client_id)::int AS client_count
+         FROM invoices i
+         JOIN payments p ON p.invoice_id = i.id
+         WHERE p.paid_at >= $2 AND i.status IN ('paid', 'sent', 'overdue') AND i.tenant_id = $1`,
+        [tenantId, monthStart],
+      ),
+      query(`
+        SELECT i.id, i.amount, i.gst_rate, i.status, i.due_date
+        FROM invoices i
+        WHERE i.tenant_id = $1
+      `, [tenantId]),
+    ]);
+
     const totalClients = clients.rows[0].total;
     const thisMonthClients = clients.rows[0].this_month;
     const lastMonthClients = clients.rows[0].last_month;
@@ -33,24 +49,8 @@ router.get('/summary', requirePerm('billing.view'), async (req, res, next) => {
         ? 100
         : 0;
 
-    // --- Revenue MTD (paid invoices this month) ---
-    const revenueRows = await query(
-      `SELECT COALESCE(SUM(i.amount * (1 + i.gst_rate / 100)), 0)::numeric AS revenue,
-              COUNT(DISTINCT i.client_id)::int AS client_count
-       FROM invoices i
-       JOIN payments p ON p.invoice_id = i.id
-       WHERE p.paid_at >= $2 AND i.status IN ('paid', 'sent', 'overdue') AND i.tenant_id = $1`,
-      [tenantId, monthStart],
-    );
-    const revenueMtd = Number(revenueRows.rows[0].revenue);
-    const revenueClientCount = revenueRows.rows[0].client_count;
-
-    // --- Invoices (for pending / overdue computation) ---
-    const invoices = await query(`
-      SELECT i.id, i.amount, i.gst_rate, i.status, i.due_date
-      FROM invoices i
-      WHERE i.tenant_id = $1
-    `, [tenantId]);
+    const revenueMtd = Number(revenue.rows[0].revenue);
+    const revenueClientCount = revenue.rows[0].client_count;
 
     let pendingTotal = 0;
     let pending30 = 0;

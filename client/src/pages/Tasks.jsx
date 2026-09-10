@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetch } from '../hooks/useFetch.js';
 import { usePerm } from '../hooks/usePerm.js';
+import { useTeam } from '../hooks/useTeam.js';
+import { useServices } from '../hooks/useServices.js';
 import { authHeaders } from '../utils/authHeader.js';
 import TaskCardModal from '../components/TaskCardModal.jsx';
 
@@ -132,11 +134,10 @@ export default function Tasks() {
     };
   });
 
-  const { data: members } = useFetch('/team');
-  const memberList = Array.isArray(members) ? members : (members?.members || []);
+  const teamData = useTeam();
+  const memberList = Array.isArray(teamData?.members) ? teamData.members : [];
 
-  const { data: services } = useFetch('/services');
-  const svcList = Array.isArray(services) ? services : [];
+  const svcList = useServices();
 
   const { data: clients } = useFetch('/clients');
   const clientList = Array.isArray(clients) ? clients : [];

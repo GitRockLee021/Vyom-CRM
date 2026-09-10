@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../config/db.js';
 import { httpError } from '../utils/http-error.js';
 import { requirePerm } from '../middleware/auth.middleware.js';
+import { clearPermissions } from '../utils/roles.js';
 
 const router = Router();
 
@@ -82,6 +83,7 @@ router.put('/:id', requirePerm('settings.manage_roles'), async (req, res, next) 
       values,
     );
     if (!rows[0]) throw httpError(404, 'Role not found');
+    clearPermissions(req.params.id);
     res.json(await serialize(rows[0], req.user.tenant_id));
   } catch (err) {
     next(err);
@@ -101,6 +103,7 @@ router.delete('/:id', requirePerm('settings.manage_roles'), async (req, res, nex
       req.params.id,
       req.user.tenant_id,
     ]);
+    clearPermissions(req.params.id);
     res.status(204).end();
   } catch (err) {
     next(err);

@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { usePerm } from '../hooks/usePerm.js';
 import { useWhatsApp } from '../hooks/useWhatsApp.js';
 import WhatsAppSendAction from '../components/WhatsAppSendAction.jsx';
+import Pagination from '../components/Pagination.jsx';
+import { loadListState, saveListState } from '../utils/listState.js';
 import { sendPaymentConfirmation } from '../api/whatsapp.js';
 
 const PAGE_SIZE = 10;
@@ -49,14 +51,24 @@ export default function Payments() {
   const waConfig = useWhatsApp();
   const { data, error, loading } = useFetch('/payments');
 
-  const [search, setSearch] = useState('');
-  const [methodFilter, setMethodFilter] = useState('');
-  const [page, setPage] = useState(1);
+  const [listInit] = useState(() => loadListState('payments_list'));
+  const [search, setSearch] = useState(listInit.search || '');
+  const [methodFilter, setMethodFilter] = useState(listInit.methodFilter || '');
+  const [page, setPage] = useState(listInit.page || 1);
   const [notice, setNotice] = useState('');
 
   const payments = Array.isArray(data) ? data : [];
 
-  useEffect(() => { setPage(1); }, [search, methodFilter]);
+  const prevFilter = useRef({ search, methodFilter });
+  useEffect(() => {
+    if (prevFilter.current.search === search && prevFilter.current.methodFilter === methodFilter) return;
+    prevFilter.current = { search, methodFilter };
+    setPage(1);
+  }, [search, methodFilter]);
+
+  useEffect(() => {
+    saveListState('payments_list', { page, search, methodFilter });
+  }, [page, search, methodFilter]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -93,18 +105,6 @@ export default function Payments() {
   const safePage = Math.min(page, totalPages);
   const start = (safePage - 1) * PAGE_SIZE;
   const rows = filtered.slice(start, start + PAGE_SIZE);
-
-  function pageList(total, current) {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-    const wanted = new Set([1, 2, total, current - 1, current, current + 1].filter((p) => p >= 1 && p <= total));
-    const sorted = [...wanted].sort((a, b) => a - b);
-    const out = [];
-    sorted.forEach((p, i) => {
-      if (i && p - sorted[i - 1] > 1) out.push('…');
-      out.push(p);
-    });
-    return out;
-  }
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-stack-lg">
@@ -305,49 +305,14 @@ export default function Payments() {
         </div>
 
         {/* Pagination */}
-        <div className="p-4 border-t border-outline-variant bg-surface-bright flex items-center justify-between">
-          <span className="font-body-md text-body-md text-on-surface-variant">
-            {filtered.length
-              ? `Showing ${start + 1} to ${Math.min(start + PAGE_SIZE, filtered.length)} of ${filtered.length} payments`
-              : 'No entries'}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={safePage <= 1}
-              className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={() => setPage(safePage - 1)}
-            >
-              <span className="material-symbols-outlined text-sm">chevron_left</span>
-            </button>
-            {pageList(totalPages, safePage).map((p, i) =>
-              p === '…' ? (
-                <span key={`gap-${i}`} className="px-2 text-on-surface-variant">…</span>
-              ) : (
-                <button
-                  key={p}
-                  type="button"
-                  className={`px-3 py-1 border rounded font-label-md text-label-md transition-colors ${
-                    p === safePage
-                      ? 'border-primary bg-primary text-on-primary'
-                      : 'border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low'
-                  }`}
-                  onClick={() => setPage(p)}
-                >
-                  {p}
-                </button>
-              )
-            )}
-            <button
-              type="button"
-              disabled={safePage >= totalPages}
-              className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={() => setPage(safePage + 1)}
-            >
-              <span className="material-symbols-outlined text-sm">chevron_right</span>
-            </button>
-          </div>
-        </div>
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+          label="payments"
+        />
       </div>
     </div>
   );

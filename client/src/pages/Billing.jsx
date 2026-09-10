@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch.js';
 import { usePerm } from '../hooks/usePerm.js';
 import { useWhatsApp } from '../hooks/useWhatsApp.js';
 import WhatsAppSendAction from '../components/WhatsAppSendAction.jsx';
+import Pagination from '../components/Pagination.jsx';
+import { loadListState, saveListState } from '../utils/listState.js';
 import { sendInvoiceNotice } from '../api/whatsapp.js';
 import { authHeaders } from '../utils/authHeader.js';
 import InvoiceDocument from '../components/InvoiceDocument.jsx';
@@ -44,16 +46,26 @@ export default function Billing() {
   const waConfig = useWhatsApp();
   const { data, error, loading, reload } = useFetch('/invoices');
 
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [page, setPage] = useState(1);
+  const [listInit] = useState(() => loadListState('billing_list'));
+  const [search, setSearch] = useState(listInit.search || '');
+  const [statusFilter, setStatusFilter] = useState(listInit.statusFilter || '');
+  const [page, setPage] = useState(listInit.page || 1);
   const [notice, setNotice] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
   const invoices = Array.isArray(data) ? data : [];
 
-  useEffect(() => { setPage(1); }, [search, statusFilter]);
+  const prevFilter = useRef({ search, statusFilter });
+  useEffect(() => {
+    if (prevFilter.current.search === search && prevFilter.current.statusFilter === statusFilter) return;
+    prevFilter.current = { search, statusFilter };
+    setPage(1);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    saveListState('billing_list', { page, search, statusFilter });
+  }, [page, search, statusFilter]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -106,21 +118,23 @@ export default function Billing() {
   const start = (safePage - 1) * PAGE_SIZE;
   const rows = filtered.slice(start, start + PAGE_SIZE);
 
-  function pageList(total, current) {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-    const wanted = new Set([1, 2, total, current - 1, current, current + 1].filter((p) => p >= 1 && p <= total));
-    const sorted = [...wanted].sort((a, b) => a - b);
-    const out = [];
-    sorted.forEach((p, i) => {
-      if (i && p - sorted[i - 1] > 1) out.push('…');
-      out.push(p);
-    });
-    return out;
-  }
-
-  function downloadPdf(invoice) {
+  async function downloadPdf(invoice) {
+    if (typeof html2pdf === 'undefined') {
+      try {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+          s.onload = resolve;
+          s.onerror = () => reject(new Error('load failed'));
+          document.head.appendChild(s);
+        });
+      } catch {
+        setNotice('PDF download is unavailable right now. Please try again.');
+        return;
+      }
+    }
     const el = document.getElementById(`invoice-pdf-${invoice.id}`);
-    if (!el || typeof html2pdf === 'undefined') {
+    if (!el) {
       setNotice('PDF download is unavailable right now. Please try again.');
       return;
     }
@@ -440,49 +454,14 @@ export default function Billing() {
               </div>
 
               {/* Pagination */}
-              <div className="p-4 border-t border-outline-variant bg-surface-bright flex items-center justify-between">
-                <span className="font-body-md text-body-md text-on-surface-variant">
-                  {filtered.length
-                    ? `Showing ${start + 1} to ${Math.min(start + PAGE_SIZE, filtered.length)} of ${filtered.length} invoices`
-                    : 'No entries'}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={safePage <= 1}
-                    className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={() => setPage(safePage - 1)}
-                  >
-                    <span className="material-symbols-outlined text-sm">chevron_left</span>
-                  </button>
-                  {pageList(totalPages, safePage).map((p, i) =>
-                    p === '…' ? (
-                      <span key={`gap-${i}`} className="px-2 text-on-surface-variant">…</span>
-                    ) : (
-                      <button
-                        key={p}
-                        type="button"
-                        className={`px-3 py-1 border rounded font-label-md text-label-md transition-colors ${
-                          p === safePage
-                            ? 'border-primary bg-primary text-on-primary'
-                            : 'border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low'
-                        }`}
-                        onClick={() => setPage(p)}
-                      >
-                        {p}
-                      </button>
-                    )
-                  )}
-                  <button
-                    type="button"
-                    disabled={safePage >= totalPages}
-                    className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={() => setPage(safePage + 1)}
-                  >
-                    <span className="material-symbols-outlined text-sm">chevron_right</span>
-                  </button>
-                </div>
-              </div>
+              <Pagination
+                page={safePage}
+                totalPages={totalPages}
+                totalItems={filtered.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+                label="invoices"
+              />
             </div>
           </div>
         </div>

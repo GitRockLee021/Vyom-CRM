@@ -43,11 +43,28 @@ export async function defaultRoleId(tenantId, roleText) {
 
 // Resolve the effective permission set for a user: linked role row first,
 // then the coarse-text-role fallback. Admins always get full access.
+// Non-admin permission sets are cached briefly (TTL) to avoid a DB round trip
+// on every API request; edits to a role bust the cache via clearPermissions.
+const PERM_CACHE_TTL_MS = 30_000;
+const permCache = new Map(); // key: `${tenantId}:${roleId}` -> { perms, expires }
+
+export function clearPermissions(roleId) {
+  for (const [key] of permCache) {
+    if (key.endsWith(`:${roleId}`)) permCache.delete(key);
+  }
+}
+
 export async function loadPermissions(user) {
   if (user?.role === 'admin') return TEXT_ROLE_PERMISSIONS.admin;
   if (user?.role_id) {
+    const cacheKey = `${user.tenant_id}:${user.role_id}`;
+    const hit = permCache.get(cacheKey);
+    if (hit && hit.expires > Date.now()) return hit.perms;
     const { rows } = await query('SELECT permissions FROM roles WHERE id = $1', [user.role_id]);
-    if (rows[0]?.permissions) return rows[0].permissions;
+    if (rows[0]?.permissions) {
+      permCache.set(cacheKey, { perms: rows[0].permissions, expires: Date.now() + PERM_CACHE_TTL_MS });
+      return rows[0].permissions;
+    }
   }
   return (
     TEXT_ROLE_PERMISSIONS[user?.role] || {
