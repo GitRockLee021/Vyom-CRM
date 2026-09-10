@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
   const { token: initialToken, user: initialUser } = readStoredAuth();
   const [user, setUser] = useState(initialUser);
   const [token, setToken] = useState(initialToken);
-  const [initializing, setInitializing] = useState(true);
+  const [initializing, setInitializing] = useState(false);
 
   useEffect(() => {
     if (!token) {

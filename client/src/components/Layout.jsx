@@ -39,14 +39,115 @@ const SUB_ACTIVE_CLASSES =
 const SUB_INACTIVE_CLASSES =
   'block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md';
 
-function FilledIcon({ name, filled = false }) {
+const ICONS = {
+  dashboard: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+    </>
+  ),
+  group: (
+    <>
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </>
+  ),
+  task_alt: (
+    <>
+      <polyline points="9 11 12 14 22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </>
+  ),
+  receipt_long: (
+    <>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </>
+  ),
+  settings: (
+    <>
+      <line x1="4" y1="21" x2="4" y2="14" />
+      <line x1="4" y1="10" x2="4" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12" y2="3" />
+      <line x1="20" y1="21" x2="20" y2="16" />
+      <line x1="20" y1="12" x2="20" y2="3" />
+      <line x1="1" y1="14" x2="7" y2="14" />
+      <line x1="9" y1="8" x2="15" y2="8" />
+      <line x1="17" y1="16" x2="23" y2="16" />
+    </>
+  ),
+  contact_support: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </>
+  ),
+  assured_workload: (
+    <>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <polyline points="9 12 11 14 15 10" />
+    </>
+  ),
+  chevron: <polyline points="6 9 12 15 18 9" />,
+  menu: (
+    <>
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </>
+  ),
+  notifications: (
+    <>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </>
+  ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </>
+  ),
+};
+
+function Icon({ name, size = 20, className = '' }) {
   return (
-    <span
-      className="material-symbols-outlined text-[20px]"
-      style={{ fontVariationSettings: `'FILL' ${filled ? 1 : 0}` }}
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`shrink-0 ${className}`}
+      aria-hidden="true"
     >
-      {name}
-    </span>
+      {ICONS[name] || null}
+    </svg>
   );
 }
 
@@ -87,13 +188,8 @@ export default function Layout() {
       >
         {/* Brand/Header */}
         <div className="mb-stack-lg flex items-center gap-3 px-2">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <span
-              className="material-symbols-outlined text-primary"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              assured_workload
-            </span>
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+            <Icon name="assured_workload" size={24} className="text-primary" />
           </div>
           <div>
             <h2 className="font-headline-sm text-headline-sm text-primary break-words leading-tight">
@@ -118,15 +214,13 @@ export default function Layout() {
                     onClick={() => setOpen((v) => !v)}
                     className={`w-full ${active ? ACTIVE_CLASSES : INACTIVE_CLASSES}`}
                   >
-                    <FilledIcon name={item.icon} filled={active} />
+                    <Icon name={item.icon} />
                     {item.label}
-                    <span
-                      className={`material-symbols-outlined text-sm ml-auto transition-transform duration-200 ${
-                        expanded ? 'rotate-180' : ''
-                      }`}
-                    >
-                      expand_more
-                    </span>
+                    <Icon
+                      name="chevron"
+                      size={18}
+                      className={`ml-auto transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+                    />
                   </button>
                   {expanded && (
                     <ul className="ml-6 mt-1 space-y-1 mb-1 border-l border-outline-variant dark:border-outline pl-3">
@@ -160,7 +254,7 @@ export default function Layout() {
               >
                 {({ isActive }) => (
                   <>
-                    <FilledIcon name={item.icon} filled={isActive} />
+                    <Icon name={item.icon} />
                     {item.label}
                   </>
                 )}
@@ -179,12 +273,12 @@ export default function Layout() {
                   onClick={handleLogout}
                   className={`w-full ${INACTIVE_CLASSES}`}
                 >
-                  <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
+                  <Icon name={item.icon} />
                   {item.label}
                 </button>
               ) : (
                 <a href="#" onClick={(e) => e.preventDefault()} className={INACTIVE_CLASSES}>
-                  <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
+                  <Icon name={item.icon} />
                   {item.label}
                 </a>
               )}
@@ -202,7 +296,7 @@ export default function Layout() {
             onClick={() => setMobileOpen(true)}
             className="md:hidden p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full mr-2"
           >
-            <span className="material-symbols-outlined">menu</span>
+            <Icon name="menu" className="text-on-surface-variant" />
           </button>
 
           <div className="md:hidden font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed mr-auto">
@@ -210,9 +304,7 @@ export default function Layout() {
           </div>
 
           <div className="hidden md:flex items-center bg-surface-container-low rounded-full px-4 py-2 w-96 border border-transparent focus-within:border-primary transition-colors">
-            <span className="material-symbols-outlined text-on-surface-variant mr-2 text-[20px]">
-              search
-            </span>
+            <Icon name="search" size={20} className="text-on-surface-variant mr-2" />
             <input
               className="bg-transparent border-none focus:ring-0 w-full text-body-md font-body-md text-on-surface placeholder-on-surface-variant p-0 m-0 outline-none"
               placeholder="Search clients, projects, or invoices..."
@@ -225,7 +317,7 @@ export default function Layout() {
               type="button"
               className="relative p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80"
             >
-              <span className="material-symbols-outlined text-[24px]">notifications</span>
+              <Icon name="notifications" size={24} className="text-on-surface-variant" />
               <span className="absolute top-1 right-1 bg-error text-on-error text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                 5
               </span>
@@ -234,7 +326,7 @@ export default function Layout() {
               type="button"
               className="p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80"
             >
-              <span className="material-symbols-outlined text-[24px]">help</span>
+              <Icon name="help" size={24} className="text-on-surface-variant" />
             </button>
             <div className="h-6 w-[1px] bg-outline-variant mx-2"></div>
             <button
