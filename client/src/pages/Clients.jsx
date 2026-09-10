@@ -348,7 +348,7 @@ export default function Clients() {
     const preview = [];
     for (let i = 1; i < table.length; i += 1) {
       const r = table[i];
-      const name = (r[iName] || '').trim();
+      const name = String(r[iName] ?? '').trim();
       if (!name) continue;
       const { ids, unknown, usedFallback } = resolveServicesFor(r);
       const errors = [];
@@ -357,11 +357,11 @@ export default function Clients() {
       preview.push({
         excelRow: i + 1,
         name,
-        type: normalizeType(iType >= 0 ? r[iType] : ''),
-        email: (iEmail >= 0 ? r[iEmail] : '').trim() || null,
-        phone: (iPhone >= 0 ? r[iPhone] : '').trim() || null,
-        city: (iCity >= 0 ? r[iCity] : '').trim() || null,
-        status: normalizeStatus(iStatus >= 0 ? r[iStatus] : ''),
+        type: normalizeType(iType >= 0 ? String(r[iType] ?? '') : ''),
+        email: (iEmail >= 0 ? String(r[iEmail] ?? '') : '').trim() || null,
+        phone: (iPhone >= 0 ? String(r[iPhone] ?? '') : '').trim() || null,
+        city: (iCity >= 0 ? String(r[iCity] ?? '') : '').trim() || null,
+        status: normalizeStatus(iStatus >= 0 ? String(r[iStatus] ?? '') : ''),
         serviceIds: ids,
         serviceNames: ids.map((id) => byId.get(id)).filter(Boolean),
         usedFallback,
@@ -373,6 +373,8 @@ export default function Clients() {
 
     setImportPreview(preview);
     setImportDone(false);
+    } catch (err) {
+      setNotice(`Could not read that file: ${err?.message || 'unknown error'}`);
     } finally {
       setParsingFile(false);
     }
@@ -774,7 +776,7 @@ export default function Clients() {
           <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-card-lg w-full max-w-6xl p-container-padding max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-headline-md text-headline-md text-on-surface mb-1">Review before importing</h3>
             <p className="font-body-md text-body-md text-on-surface-variant mb-stack-md">
-              {importPreview.length} row(s) found. Rows with issues are skipped — check the error column.
+              {importPreview.length} row(s) found. Rows with problems are listed in the <strong className="text-on-surface">Issues</strong> column and are skipped from import.
             </p>
             <div className="overflow-auto border border-outline-variant rounded-lg mb-stack-md">
               <table className="w-full text-left font-body-sm text-body-sm">
@@ -788,11 +790,12 @@ export default function Clients() {
                     <th className="px-3 py-2">City</th>
                     <th className="px-3 py-2">Services</th>
                     <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Issues</th>
                   </tr>
                 </thead>
                 <tbody>
                   {importPreview.map((p) => (
-                    <tr key={`${p.excelRow}-${p.name}`} className="border-t border-outline-variant align-top">
+                    <tr key={`${p.excelRow}-${p.name}`} className={`border-t border-outline-variant align-top ${p.skippedRows && !p.outcome ? 'bg-error/5' : ''}`}>
                       <td className="px-3 py-2 text-on-surface-variant">{p.excelRow}</td>
                       <td className="px-3 py-2 font-label-md text-label-md text-on-surface">{p.name}</td>
                       <td className="px-3 py-2">{typeLabel(p.type)}</td>
@@ -800,26 +803,36 @@ export default function Clients() {
                       <td className="px-3 py-2">{p.phone || '—'}</td>
                       <td className="px-3 py-2">{p.city || '—'}</td>
                       <td className="px-3 py-2">
-                        {p.errors.length ? (
-                          <span className="text-error">{p.errors.join('. ')}</span>
-                        ) : p.serviceNames.length ? (
+                        {p.serviceNames.length ? (
                           p.serviceNames.map((s) => <span key={s} className="inline-block bg-surface-variant text-on-surface-variant rounded-full px-2 py-0.5 mr-1 mb-1 text-label-sm">{s}</span>)
                         ) : (
                           <span className="text-on-surface-variant">—</span>
                         )}
-                        {p.usedFallback && !p.errors.length && (
+                        {p.usedFallback && !p.skippedRows && (
                           <span className="block text-on-surface-variant text-label-sm">(auto: first available service)</span>
-                        )}
-                        {p.outcome && (
-                          <span className={`block font-label-sm text-label-sm ${p.outcome.ok ? 'text-[#166534]' : 'text-error'}`}>
-                            {p.outcome.ok ? '✓ Imported' : `✗ ${p.outcome.message}`}
-                          </span>
-                        )}
-                        {p.skippedRows && !p.outcome && (
-                          <span className="block font-label-sm text-label-sm text-error">Skipped</span>
                         )}
                       </td>
                       <td className="px-3 py-2 capitalize">{p.status}</td>
+                      <td className="px-3 py-2">
+                        {p.outcome ? (
+                          p.outcome.ok ? (
+                            <span className="font-label-sm text-label-sm text-[#166534]">✓ Imported</span>
+                          ) : (
+                            <span className="block font-label-sm text-label-sm text-error">✗ {p.outcome.message}</span>
+                          )
+                        ) : p.errors.length ? (
+                          <ul className="space-y-1">
+                            {p.errors.map((e) => (
+                              <li key={e} className="font-label-sm text-label-sm text-error flex items-start gap-1">
+                                <span>•</span>
+                                <span>{e}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="font-label-sm text-label-sm text-[#166534]">✓ OK</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
