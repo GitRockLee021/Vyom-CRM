@@ -30,6 +30,11 @@ function publicMember(row) {
 // GET /api/team — members and pending invites for the caller's tenant
 router.get('/', async (req, res, next) => {
   try {
+    await query(
+      "DELETE FROM invitations WHERE tenant_id = $1 AND expires_at <= now()",
+      [req.user.tenant_id],
+    );
+
     const [members, invites] = await Promise.all([
       query(
         'SELECT id, full_name, email, role, is_active, created_at FROM users WHERE tenant_id = $1 ORDER BY created_at ASC',
@@ -37,7 +42,7 @@ router.get('/', async (req, res, next) => {
       ),
       query(
         `SELECT id, email, role, invited_by, expires_at, used_at, created_at
-         FROM invitations WHERE tenant_id = $1 AND used_at IS NULL ORDER BY created_at DESC`,
+         FROM invitations WHERE tenant_id = $1 AND used_at IS NULL AND expires_at > now() ORDER BY created_at DESC`,
         [req.user.tenant_id],
       ),
     ]);
@@ -65,8 +70,14 @@ router.post('/invites', requireRole('admin'), async (req, res, next) => {
     const existing = await query('SELECT id FROM users WHERE email = $1', [normalized]);
     if (existing.rows.length) throw httpError(409, 'That email already belongs to an account');
 
+    // Clear any stale (expired) invites for this email so they never block or collide.
+    await query(
+      'DELETE FROM invitations WHERE tenant_id = $1 AND lower(email) = $2 AND expires_at <= now()',
+      [req.user.tenant_id, normalized],
+    );
+
     const pending = await query(
-      'SELECT id FROM invitations WHERE tenant_id = $1 AND lower(email) = $2 AND used_at IS NULL',
+      'SELECT id FROM invitations WHERE tenant_id = $1 AND lower(email) = $2 AND used_at IS NULL AND expires_at > now()',
       [req.user.tenant_id, normalized],
     );
     if (pending.rows.length) throw httpError(409, 'An invite for this email is already pending');
