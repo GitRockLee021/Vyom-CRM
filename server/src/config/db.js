@@ -118,6 +118,18 @@ async function autoMigrate() {
         ORDER BY task_id, created_at ASC
       ) a
       WHERE t.id = a.task_id AND t.assigned_to IS NULL;
+
+      -- Fallback: any task still without an assignee gets claimed by the
+      -- tenant's owner (earliest admin). Idempotent — only unassigned rows.
+      UPDATE tasks t
+      SET assigned_to = u.id
+      FROM (
+        SELECT DISTINCT ON (tenant_id) tenant_id, id
+        FROM users
+        WHERE role = 'admin'
+        ORDER BY tenant_id, created_at ASC
+      ) u
+      WHERE t.tenant_id = u.tenant_id AND t.assigned_to IS NULL;
     `);
     console.log('[db] client_services, wa_messages and tasks-module tables ensured');
   } catch (err) {
