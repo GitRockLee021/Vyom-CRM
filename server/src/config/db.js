@@ -105,6 +105,19 @@ async function autoMigrate() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
       CREATE INDEX IF NOT EXISTS idx_ta_task ON task_activity (task_id);
+
+      -- Backfill assignee for tasks that carry no assignee but have a "created"
+      -- activity record (assign to the user who created the task). Idempotent:
+      -- only touches rows where assigned_to is still NULL.
+      UPDATE tasks t
+      SET assigned_to = a.user_id
+      FROM (
+        SELECT DISTINCT ON (task_id) task_id, user_id
+        FROM task_activity
+        WHERE action = 'created' AND user_id IS NOT NULL
+        ORDER BY task_id, created_at ASC
+      ) a
+      WHERE t.id = a.task_id AND t.assigned_to IS NULL;
     `);
     console.log('[db] client_services, wa_messages and tasks-module tables ensured');
   } catch (err) {
