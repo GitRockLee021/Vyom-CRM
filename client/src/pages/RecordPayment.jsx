@@ -19,7 +19,7 @@ function fmtCurrency(n) {
 }
 
 function invoiceTotal(inv) {
-  const gst = Number(inv.gst_rate) || 18;
+  const gst = Number(inv.gst_rate) || 0;
   return Number(inv.amount) * (1 + gst / 100);
 }
 
