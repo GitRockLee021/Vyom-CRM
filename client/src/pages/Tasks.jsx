@@ -3,6 +3,7 @@ import { useFetch } from '../hooks/useFetch.js';
 import { usePerm } from '../hooks/usePerm.js';
 import { useTeam } from '../hooks/useTeam.js';
 import { useServices } from '../hooks/useServices.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import { authHeaders } from '../utils/authHeader.js';
 import TaskCardModal from '../components/TaskCardModal.jsx';
 
@@ -79,8 +80,10 @@ function svcTag(serviceName) {
 
 export default function Tasks() {
   const can = usePerm();
+  const { user } = useAuth();
   const [view, setView] = useState('board');
   const [serviceFilter, setServiceFilter] = useState(null);
+  const [myTasks, setMyTasks] = useState(user?.role !== 'admin');
   const [modalTaskId, setModalTaskId] = useState(null);
   const [createMode, setCreateMode] = useState(null);
   const [toast, setToast] = useState('');
@@ -91,7 +94,10 @@ export default function Tasks() {
   const [filterYear, setFilterYear] = useState(now.getFullYear());
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const qs = serviceFilter ? `?service_id=${serviceFilter}` : '';
+  const params = new URLSearchParams();
+  if (serviceFilter) params.set('service_id', serviceFilter);
+  if (myTasks && user?.id) params.set('assigned_to', user.id);
+  const qs = params.toString() ? `?${params.toString()}` : '';
   const { data: allTasks, error, loading, reload } = useFetch(`/tasks${qs}`);
 
   const tasks = Array.isArray(allTasks) ? allTasks : [];
@@ -145,7 +151,7 @@ export default function Tasks() {
   clientList.forEach((c) => (c.services || []).forEach((s) => {
     countBySvc[s.id] = (countBySvc[s.id] || 0) + 1;
   }));
-  const sortedSvcs = [...svcList].sort(
+  const sortedSvcs = [...(Array.isArray(svcList) ? svcList : [])].sort(
     (a, b) => (countBySvc[b.id] || 0) - (countBySvc[a.id] || 0) || a.name.localeCompare(b.name)
   );
 
@@ -278,6 +284,16 @@ export default function Tasks() {
         </div>
 
         <div className="inline-flex items-center gap-3">
+          {/* My tasks filter */}
+          <button
+            onClick={() => setMyTasks((v) => !v)}
+            className={`px-3.5 py-2 rounded-full border font-label-md text-label-md inline-flex items-center gap-1.5 transition-colors ${myTasks ? 'bg-primary text-white border-primary shadow-card' : 'border-outline-variant text-on-surface-variant bg-surface-container-lowest hover:bg-surface-container-low'}`}
+            title={myTasks ? 'Showing tasks assigned to you only' : 'Show all tasks in the workspace'}
+          >
+            <span className="material-symbols-outlined text-[18px]">assignment_ind</span>
+            My tasks
+          </button>
+
           {/* Add Task */}
           <button
             onClick={() => setCreateMode(true)}

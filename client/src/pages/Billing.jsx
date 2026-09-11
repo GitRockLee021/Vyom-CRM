@@ -144,7 +144,9 @@ export default function Billing() {
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    }).from(el).save();
+    }).from(el).save().catch(() => {
+      setNotice('Could not generate the PDF. Please try again.');
+    });
   }
 
   async function confirmDelete() {
@@ -466,9 +468,11 @@ export default function Billing() {
           </div>
         </div>
 
-      {/* Hidden PDF templates for each visible invoice */}
+      {/* Hidden PDF templates for each visible invoice.
+          Keep them fully rendered but off-screen so html2canvas can capture
+          their real dimensions (height:0/overflow:hidden would yield a blank PDF). */}
       {!loading && rows.map((inv) => (
-        <div key={inv.id} style={{ height: 0, overflow: 'hidden' }}>
+        <div key={inv.id} style={{ position: 'fixed', top: 0, left: '-9999px', width: 700, pointerEvents: 'none' }}>
           <div id={`invoice-pdf-${inv.id}`}>
             <InvoiceDocument invoice={inv} />
           </div>

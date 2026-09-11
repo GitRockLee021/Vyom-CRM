@@ -5,7 +5,7 @@ let _cache = null;
 let _promise = null;
 
 export function useServices() {
-  const [services, setServices] = useState(_cache);
+  const [services, setServices] = useState(_cache ?? []);
 
   useEffect(() => {
     if (_cache) { setServices(_cache); return; }

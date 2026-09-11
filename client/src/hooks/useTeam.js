@@ -5,7 +5,7 @@ let _cache = null;
 let _promise = null;
 
 export function useTeam() {
-  const [team, setTeam] = useState(_cache);
+  const [team, setTeam] = useState(_cache ?? { members: [] });
 
   useEffect(() => {
     if (_cache) { setTeam(_cache); return; }

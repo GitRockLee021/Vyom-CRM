@@ -41,17 +41,42 @@ export default function InvoiceView() {
     return () => { cancelled = true; };
   }, [id]);
 
-  function downloadPdf() {
+  async function downloadPdf() {
+    if (typeof html2pdf === 'undefined') {
+      try {
+        setNotice('Loading PDF engine…');
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+          s.onload = resolve;
+          s.onerror = () => reject(new Error('load failed'));
+          document.head.appendChild(s);
+        });
+      } catch {
+        setNotice('PDF download is unavailable right now. Check your connection and try again.');
+        return;
+      }
+    }
     const el = document.getElementById('invoice-printable');
-    if (!el || typeof html2pdf === 'undefined') return;
+    if (!el) {
+      setNotice('PDF download is unavailable right now. Please try again.');
+      return;
+    }
     setDownloading(true);
-    html2pdf().set({
-      margin: 10,
-      filename: `${invoice?.invoice_number || 'invoice'}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    }).from(el).save().finally(() => setDownloading(false));
+    setNotice('');
+    try {
+      await html2pdf().set({
+        margin: 10,
+        filename: `${invoice?.invoice_number || 'invoice'}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      }).from(el).save();
+    } catch {
+      setNotice('Could not generate the PDF. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
   }
 
   async function sendReminderEmail() {
