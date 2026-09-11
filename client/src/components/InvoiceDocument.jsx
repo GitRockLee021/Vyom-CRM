@@ -28,12 +28,6 @@ export default function InvoiceDocument({ invoice, company }) {
     { description: 'Professional Services', note: '', qty: 1, rate: subtotal, amount: subtotal },
   ];
 
-  const status = (invoice.status || 'sent').toLowerCase();
-  const watermark =
-    status === 'paid' ? { text: 'PAID', color: 'rgba(22,163,74,0.06)' }
-    : status === 'cancelled' ? { text: 'CANCELLED', color: 'rgba(0,0,0,0.06)' }
-    : { text: 'PENDING', color: 'rgba(220,38,38,0.06)' };
-
   const from = company ? {
     name: company.company_name || 'Vyom CRM',
     address: company.address || '',
@@ -92,19 +86,6 @@ export default function InvoiceDocument({ invoice, company }) {
         borderRadius: 8,
       }}
     >
-      {/* Watermark */}
-      <div
-        style={{
-          position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%) rotate(-45deg)',
-          fontSize: 96, fontWeight: 800, textTransform: 'uppercase',
-          color: watermark.color, letterSpacing: '0.1em',
-          pointerEvents: 'none', whiteSpace: 'nowrap',
-        }}
-      >
-        {watermark.text}
-      </div>
-
       {/* Header */}
       <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: 20, marginBottom: 22, borderBottom: `1px solid ${C.variant}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -155,7 +136,7 @@ export default function InvoiceDocument({ invoice, company }) {
             {(from.gstin || from.pan || from.email) && (
               <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.variant}` }}>
                 {gstEnabled && from.gstin && <div><span style={{ fontWeight: 700, color: C.onSurface }}>GSTIN:</span> {from.gstin}</div>}
-                {from.pan && <div><span style={{ fontWeight: 700, color: C.onSurface }}>PAN:</span> {from.pan}</div>}
+                {from.pan && <div><span style={{ fontWeight: 700, color: C.onSurface }}>PAN:</span> {from.pan.toUpperCase()}</div>}
                 {from.email && <div><span style={{ fontWeight: 700, color: C.onSurface }}>Email:</span> {from.email}</div>}
                 {from.phone && <div><span style={{ fontWeight: 700, color: C.onSurface }}>Phone:</span> {from.phone}</div>}
               </div>
