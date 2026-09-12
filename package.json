@@ -14,6 +14,7 @@
     "dev:client": "npm run dev -w client",
     "test": "node --test server/test/api.test.mjs client/src/utils/authHeader.test.mjs",
     "test:e2e": "playwright test",
+    "test:sweep": "playwright test e2e/error-sweep.spec.js",
     "build": "npm run build --workspace=client && npm run build --workspace=server",
     "start": "node server/src/index.js",
     "db:init": "psql -U postgres -c \"CREATE DATABASE vyom_crm;\" && psql -U postgres -d vyom_crm -f database/schema.sql"

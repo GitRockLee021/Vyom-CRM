@@ -29,6 +29,14 @@ export default function AcceptInvite() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (!token) {
+        if (!cancelled) {
+          setValid(false);
+          setError('This invite link is invalid or has expired.');
+          setChecking(false);
+        }
+        return;
+      }
       try {
         const res = await fetch(`/api/auth/invite?token=${encodeURIComponent(token)}`);
         const data = await res.json().catch(() => null);

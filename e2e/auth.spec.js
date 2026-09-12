@@ -94,9 +94,17 @@ test.describe.serial('1. Authentication', () => {
     expect(new URL(page.url()).pathname).toBe('/login');
   });
 
-  test('1.2 "Remember me" checkbox is absent', async ({ page }) => {
+  test('1.2 "Remember me" checkbox stores the session in localStorage', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByLabel(/remember me/i)).toHaveCount(0);
+    await page.getByLabel(/remember me/i).check();
+    await page.fill('#email', emailA);
+    await page.fill('#password', PW);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page).toHaveURL(/\/$/, { timeout: 30000 });
+    const inLocal = await page.evaluate(() => localStorage.getItem('vyom_token'));
+    const inSession = await page.evaluate(() => sessionStorage.getItem('vyom_token'));
+    expect(inLocal).toBeTruthy();
+    expect(inSession).toBeNull();
   });
 
   test('1.3 Logout clears session and redirects to /login', async ({ page }) => {

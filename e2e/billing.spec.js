@@ -64,7 +64,7 @@ test.describe('4. Billing / Invoices', () => {
     const invNumberInput = page.locator('input[readonly]').first();
     await expect(invNumberInput).not.toHaveValue('', { timeout: 30000 });
     const invNumber = await invNumberInput.inputValue();
-    expect(invNumber).toMatch(/VY-\d{4}-\d{4}/);
+    expect(invNumber).toMatch(/^[A-Z]+-\d{4}-\d{4}$/);
 
     await page.getByRole('button', { name: /Save$/ }).click();
     await expect(page).toHaveURL(/\/invoices$/, { timeout: 30000 });
@@ -106,14 +106,16 @@ test.describe('4. Billing / Invoices', () => {
     expect(Number(updated.amount)).toBe(2000);
   });
 
-  test('4.3 Edit invoice — status changes via save actions (no dedicated control)', async ({ page }) => {
+  test('4.3 Edit invoice — status changes via the status dropdown', async ({ page }) => {
     const inv = await createInvoice(tenant.admin.token, client.id, {
       status: 'draft',
       notes: JSON.stringify({ items: [{ service: 'Consulting', description: '', qty: 1, rate: 1000, tax: 18 }] }),
     });
     await gotoAuthed(page, tenant.admin.token, tenant.admin.user, `/invoices/${inv.id}/edit`);
     await expect(page.getByRole('heading', { name: client.name })).toBeVisible({ timeout: 30000 });
-    await expect(page.locator('select#status')).toHaveCount(0);
+    const statusSelect = page.locator('select#invoice-status');
+    await expect(statusSelect).toHaveValue('draft', { timeout: 30000 });
+    await statusSelect.selectOption('sent');
     await page.getByRole('button', { name: /Update$/ }).click();
     await expect(page).toHaveURL(/\/invoices$/, { timeout: 30000 });
     const updated = await api(`/api/invoices/${inv.id}`, { token: tenant.admin.token });
@@ -158,11 +160,12 @@ test.describe('4. Billing / Invoices', () => {
     await expect(newPage.getByRole('button', { name: 'Download PDF' })).toBeVisible();
   });
 
-  test('4.5 Breadcrumb / back navigation is "Back to Billing"', async ({ page }) => {
+  test('4.5 Breadcrumb / back navigation returns to Billing', async ({ page }) => {
     const inv = await createInvoice(tenant.admin.token, client.id);
     await gotoAuthed(page, tenant.admin.token, tenant.admin.user, `/invoice/${inv.id}`);
-    await expect(page.getByRole('button', { name: /Back to Billing/i })).toBeVisible({ timeout: 30000 });
-    await page.getByRole('button', { name: /Back to Billing/i }).click();
+    const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+    await expect(breadcrumb.getByText('Billing', { exact: true })).toBeVisible({ timeout: 30000 });
+    await breadcrumb.getByText('Billing', { exact: true }).click();
     await expect(page).toHaveURL(/\/invoices$/, { timeout: 30000 });
   });
 
