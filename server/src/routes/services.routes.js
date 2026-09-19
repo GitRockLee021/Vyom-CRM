@@ -26,13 +26,18 @@ router.get('/', requirePerm('engagements.view'), async (req, res, next) => {
   try {
     const { category } = req.query;
     const params = [req.user.tenant_id];
-    let where = 'WHERE tenant_id = $1';
+    let where = 'WHERE s.tenant_id = $1';
     if (category) {
       params.push(category);
-      where += ` AND category = $2`;
+      where += ' AND s.category = $2';
     }
     const { rows } = await query(
-      `SELECT * FROM services ${where} ORDER BY name`,
+      `SELECT s.*, COUNT(cs.client_id)::int AS client_count
+       FROM services s
+       LEFT JOIN client_services cs ON cs.service_id = s.id
+       ${where}
+       GROUP BY s.id
+       ORDER BY s.name`,
       params
     );
     res.json(rows);

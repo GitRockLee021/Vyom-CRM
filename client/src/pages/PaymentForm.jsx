@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { usePerm } from '../hooks/usePerm.js';
 import AccessDenied from '../components/AccessDenied.jsx';
+import NewTabLink from '../components/NewTabLink.jsx';
 import { authHeaders } from '../utils/authHeader.js';
 
 const PAYMENT_METHODS = [
@@ -245,14 +246,12 @@ export default function PaymentForm() {
               <div className="p-stack-md flex flex-col gap-4">
                 <div className="flex justify-between items-center">
                   <span className="text-on-surface-variant">Invoice</span>
-                  <a
+                  <NewTabLink
                     className="font-data-mono text-data-mono text-primary font-medium hover:underline cursor-pointer"
                     href={`/invoice/${activeInvoiceId || origInvoiceId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
                   >
                     {activeInvoice ? activeInvoice.invoice_number : payment.invoice_number}
-                  </a>
+                  </NewTabLink>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-on-surface-variant">Client</span>

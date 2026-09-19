@@ -8,29 +8,28 @@ export function fmtCurrency(n) {
   return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function lineItemFrom(raw) {
+  const qty = Number(raw.qty) || 1;
+  const rate = Number(raw.rate) || 0;
+  return {
+    service: raw.service || '',
+    description: raw.description || raw.service || '',
+    note: raw.note || '',
+    qty,
+    rate,
+    amount: Number(raw.amount) || qty * rate,
+  };
+}
+
 export function parseLineItems(notes, fallbackAmount) {
   if (!notes) return null;
   try {
     const p = JSON.parse(notes);
     if (p && typeof p === 'object' && !Array.isArray(p) && Array.isArray(p.items) && p.items.length) {
-      return p.items.map((it) => ({
-        service: it.service || '',
-        description: it.description || it.service || '',
-        note: it.note || '',
-        qty: Number(it.qty) || 1,
-        rate: Number(it.rate) || 0,
-        amount: Number(it.amount) || 0,
-      }));
+      return p.items.map(lineItemFrom);
     }
     if (Array.isArray(p) && p.length && p[0].description !== undefined) {
-      return p.map((it) => ({
-        service: it.service || '',
-        description: it.description || it.service || '',
-        note: it.note || '',
-        qty: Number(it.qty) || 1,
-        rate: Number(it.rate) || 0,
-        amount: Number(it.amount) || 0,
-      }));
+      return p.map(lineItemFrom);
     }
   } catch {
     /* ignore */

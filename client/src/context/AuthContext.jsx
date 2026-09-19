@@ -2,6 +2,14 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 const TOKEN_KEY = 'vyom_token';
 const USER_KEY = 'vyom_user';
+const HANDOFF_KEY = 'vyom_tab_handoff';
+
+// Store the session into shared localStorage so a freshly-opened tab
+// (target="_blank" + rel="noopener noreferrer") can pick it up.
+export function handoffSession(token, user) {
+  if (!token) return;
+  localStorage.setItem(HANDOFF_KEY, JSON.stringify({ token, user }));
+}
 
 // Session persistence: "Remember me" uses localStorage (survives browser restarts),
 // otherwise sessionStorage (cleared when the tab/browser closes).
@@ -27,9 +35,28 @@ function storeOf(key) {
 
 function readStoredAuth() {
   try {
-    const rawUser = sessionStore.get(USER_KEY);
+    // A new tab does not inherit sessionStorage, and target="_blank" links use
+    // rel="noopener noreferrer" (window.opener is null). The clicking tab instead
+    // drops a handoff payload into shared localStorage, which we consume here.
+    let handoff = null;
+    try {
+      handoff = JSON.parse(localStorage.getItem(HANDOFF_KEY) || 'null');
+    } catch {
+      handoff = null;
+    }
+    localStorage.removeItem(HANDOFF_KEY);
+
+    let token = sessionStore.get(TOKEN_KEY);
+    let rawUser = sessionStore.get(USER_KEY);
+    if (!token && handoff?.token) {
+      token = handoff.token;
+      rawUser = handoff.user ? JSON.stringify(handoff.user) : null;
+      sessionStorage.setItem(TOKEN_KEY, token);
+      if (rawUser) sessionStorage.setItem(USER_KEY, rawUser);
+    }
+
     return {
-      token: sessionStore.get(TOKEN_KEY) || null,
+      token: token || null,
       user: rawUser ? JSON.parse(rawUser) : null,
     };
   } catch {

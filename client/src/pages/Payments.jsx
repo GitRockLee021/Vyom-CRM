@@ -5,6 +5,7 @@ import { usePerm } from '../hooks/usePerm.js';
 import { useWhatsApp } from '../hooks/useWhatsApp.js';
 import WhatsAppSendAction from '../components/WhatsAppSendAction.jsx';
 import Pagination from '../components/Pagination.jsx';
+import NewTabLink from '../components/NewTabLink.jsx';
 import { loadListState, saveListState } from '../utils/listState.js';
 import { sendPaymentConfirmation } from '../api/whatsapp.js';
 
@@ -253,14 +254,12 @@ export default function Payments() {
                     )}
                   </td>
                   <td className="p-4">
-                    <a
+                    <NewTabLink
                       href={`/invoice/${p.invoice_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="font-data-mono text-data-mono text-primary font-medium hover:underline cursor-pointer"
                     >
                       {p.invoice_number}
-                    </a>
+                    </NewTabLink>
                   </td>
                   <td className="p-4 font-data-mono text-data-mono text-right">{fmtCurrency(p.amount)}</td>
                   <td className="p-4">

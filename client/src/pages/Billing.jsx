@@ -5,6 +5,7 @@ import { usePerm } from '../hooks/usePerm.js';
 import { useWhatsApp } from '../hooks/useWhatsApp.js';
 import WhatsAppSendAction from '../components/WhatsAppSendAction.jsx';
 import Pagination from '../components/Pagination.jsx';
+import NewTabLink from '../components/NewTabLink.jsx';
 import { loadListState, saveListState } from '../utils/listState.js';
 import { sendInvoiceNotice } from '../api/whatsapp.js';
 import { authHeaders } from '../utils/authHeader.js';
@@ -346,14 +347,12 @@ export default function Billing() {
                       return (
                         <tr key={inv.id} className={`hover:bg-surface-bright transition-colors ${i % 2 === 1 ? 'bg-background' : ''}`}>
                           <td className="p-4">
-                            <a
+                            <NewTabLink
                               href={`/invoice/${inv.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
                               className="font-data-mono text-data-mono text-primary font-medium hover:underline cursor-pointer"
                             >
                               {inv.invoice_number}
-                            </a>
+                            </NewTabLink>
                           </td>
                           <td className="p-4 font-medium text-on-surface">
                             {can('clients.edit') ? (
@@ -378,15 +377,13 @@ export default function Billing() {
                           </td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center gap-2">
-                              <a
+                              <NewTabLink
                                 href={`/invoice/${inv.id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
                                 className="text-on-surface-variant hover:text-primary transition-colors"
                                 title="View"
                               >
                                 <span className="material-symbols-outlined text-[18px]">visibility</span>
-                              </a>
+                              </NewTabLink>
                               {can('billing.edit') && (
                                 <button
                                   type="button"
