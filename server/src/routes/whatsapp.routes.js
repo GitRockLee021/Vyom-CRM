@@ -4,9 +4,14 @@ import { httpError } from '../utils/http-error.js';
 import { requirePerm } from '../middleware/auth.middleware.js';
 import {
   isWhatsAppConfigured,
+  resolveConfig,
+  configSource,
   normalizePhone,
   sendTemplate,
   templateComponents,
+  testConnection,
+  listTemplates,
+  maskSecret,
 } from '../utils/whatsapp.js';
 
 const router = Router();
@@ -28,6 +33,14 @@ function companyName(row) {
 
 async function settingsRow(tenantId) {
   const { rows } = await query('SELECT company_name FROM settings WHERE tenant_id = $1 LIMIT 1', [tenantId]);
+  return rows[0] || {};
+}
+
+async function waSettingsRow(tenantId) {
+  const { rows } = await query(
+    'SELECT wa_access_token, wa_phone_number_id, wa_graph_version FROM settings WHERE tenant_id = $1 LIMIT 1',
+    [tenantId],
+  );
   return rows[0] || {};
 }
 
@@ -55,11 +68,130 @@ function assertText(text) {
 }
 
 // GET /api/whatsapp/config — tells the UI whether live sending is wired up.
-router.get('/config', requirePerm('billing.view'), (_req, res) => {
-  res.json({
-    configured: isWhatsAppConfigured(),
-    mode: isWhatsAppConfigured() ? 'live' : 'dev',
-  });
+router.get('/config', requirePerm('billing.view'), async (req, res, next) => {
+  try {
+    const row = await waSettingsRow(req.user.tenant_id);
+    const config = resolveConfig(row);
+    res.json({
+      configured: isWhatsAppConfigured(config),
+      mode: isWhatsAppConfigured(config) ? 'live' : 'dev',
+      from: configSource(row),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/whatsapp/settings — WhatsApp connection settings for the tenant.
+router.get('/settings', requirePerm('settings.view'), async (req, res, next) => {
+  try {
+    const row = await waSettingsRow(req.user.tenant_id);
+    const config = resolveConfig(row);
+    res.json({
+      access_token_masked: maskSecret(row.wa_access_token),
+      phone_number_id: row.wa_phone_number_id || config.phoneNumberId,
+      graph_version: config.graphVersion,
+      configured: isWhatsAppConfigured(config),
+      mode: isWhatsAppConfigured(config) ? 'live' : 'dev',
+      from: configSource(row),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/whatsapp/settings — save WhatsApp credentials.
+// Leave access_token blank to keep the stored one; pass clear_token to wipe it.
+router.put('/settings', requirePerm('settings.edit'), async (req, res, next) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const body = req.body || {};
+    const existing = await waSettingsRow(tenantId);
+
+    const token = String(body.access_token || '').trim();
+    const keepToken = token || (body.clear_token ? '' : existing.wa_access_token || '');
+    const phoneNumberId = String(body.phone_number_id || '').trim();
+    const graphVersion = String(body.graph_version || existing.wa_graph_version || 'v21.0').trim();
+
+    const upsert = await query('SELECT id FROM settings WHERE tenant_id = $1 LIMIT 1', [tenantId]);
+    if (upsert.rows.length) {
+      await query(
+        `UPDATE settings
+         SET wa_access_token = $2, wa_phone_number_id = $3, wa_graph_version = $4, updated_at = NOW()
+         WHERE tenant_id = $1`,
+        [tenantId, keepToken, phoneNumberId, graphVersion],
+      );
+    } else {
+      await query(
+        `INSERT INTO settings (tenant_id, wa_access_token, wa_phone_number_id, wa_graph_version)
+         VALUES ($1, $2, $3, $4)`,
+        [tenantId, keepToken, phoneNumberId, graphVersion],
+      );
+    }
+
+    res.json({
+      ok: true,
+      configured: Boolean(keepToken && phoneNumberId),
+      access_token_masked: maskSecret(keepToken),
+      phone_number_id: phoneNumberId,
+      graph_version: graphVersion,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/whatsapp/test — verify the connection and report on templates.
+router.post('/test', requirePerm('settings.edit'), async (req, res, next) => {
+  try {
+    const row = await waSettingsRow(req.user.tenant_id);
+    const config = resolveConfig(row);
+    if (!isWhatsAppConfigured(config)) {
+      return res.json({ ok: false, dev: true, message: 'Add your WhatsApp credentials to connect your Meta account.' });
+    }
+    try {
+      const info = await testConnection(config);
+      const templates = await listTemplates(config).catch(() => null);
+      res.json({
+        ok: true,
+        business: info.verified_name || null,
+        phone: info.display_phone_number || null,
+        tier: info.messaging_product_tier || null,
+        templates: templates?.templates || [],
+      });
+    } catch (err) {
+      res.json({ ok: false, message: err.message });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/whatsapp/messages — outbound WhatsApp message log.
+router.get('/messages', requirePerm('billing.view'), async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+    const { rows: messages } = await query(
+      `SELECT m.id, m.direction, m.wa_message_id, m.phone_number, m.client_id,
+              COALESCE(c.name, '') AS client_name,
+              m.template_name, m.body, m.status, m.error, m.created_at
+       FROM wa_messages m
+       LEFT JOIN clients c ON c.id = m.client_id
+       WHERE m.tenant_id = $1
+       ORDER BY m.created_at DESC, m.id DESC
+       LIMIT $2 OFFSET $3`,
+      [req.user.tenant_id, limit, offset]
+    );
+    const { rows: countRows } = await query(
+      'SELECT COUNT(*)::int AS total FROM wa_messages WHERE tenant_id = $1',
+      [req.user.tenant_id]
+    );
+    res.json({ messages, total: countRows[0]?.total || 0 });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // POST /api/whatsapp/send-invoice — send invoice_notice template for an invoice.
@@ -88,9 +220,12 @@ router.post('/send-invoice', requirePerm('billing.edit'), async (req, res, next)
     const company = companyName(settings);
     const body = `Invoice ${inv.invoice_number} for ${total}${due ? ` due on ${due}` : ''}.`;
 
+    const config = resolveConfig(await waSettingsRow(req.user.tenant_id));
+
     let result;
     try {
       result = await sendTemplate({
+        config,
         to: phone,
         templateName: 'invoice_notice',
         components: templateComponents([inv.client_name, inv.invoice_number, total, due, company]),
@@ -164,9 +299,12 @@ router.post('/send-reminder', requirePerm('billing.edit'), async (req, res, next
     const company = companyName(settings);
     const body = `Overdue reminder for invoice ${inv.invoice_number} (${total})`;
 
+    const config = resolveConfig(await waSettingsRow(req.user.tenant_id));
+
     let result;
     try {
       result = await sendTemplate({
+        config,
         to: phone,
         templateName: 'overdue_payment_reminder',
         components: templateComponents([inv.client_name, inv.invoice_number, total, due, company]),
@@ -233,9 +371,12 @@ router.post('/send-payment-confirmation', requirePerm('billing.record_payment'),
     const company = companyName(settings);
     const body = `Payment confirmation of ${amount} for invoice ${pmt.invoice_number}`;
 
+    const config = resolveConfig(await waSettingsRow(req.user.tenant_id));
+
     let result;
     try {
       result = await sendTemplate({
+        config,
         to: phone,
         templateName: 'payment_confirmation',
         components: templateComponents([pmt.client_name, amount, pmt.invoice_number, company]),
@@ -296,9 +437,12 @@ router.post('/send-message', requirePerm('billing.edit'), async (req, res, next)
     const settings = await settingsRow(req.user.tenant_id);
     const company = companyName(settings);
 
+    const config = resolveConfig(await waSettingsRow(req.user.tenant_id));
+
     let result;
     try {
       result = await sendTemplate({
+        config,
         to: phone,
         templateName: 'client_message',
         components: templateComponents([client.client_name, message, company]),

@@ -140,8 +140,7 @@ export default function Payments() {
           <span className="material-symbols-outlined text-[18px]">info</span>
           <span>
             WhatsApp is in <strong>dev mode</strong> — messages are logged, not actually sent.
-            Add <code className="font-data-mono text-data-mono">META_ACCESS_TOKEN</code> and{' '}
-            <code className="font-data-mono text-data-mono">META_PHONE_NUMBER_ID</code> in <code className="font-data-mono text-data-mono">server/.env</code> to go live.
+            Go to <a href="/whatsapp" className="underline underline-offset-2">WhatsApp settings</a> to connect your Meta account and go live.
           </span>
         </div>
       )}

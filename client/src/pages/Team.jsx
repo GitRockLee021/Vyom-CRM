@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useFetch } from '../hooks/useFetch.js';
+import { refreshTeam } from '../hooks/useTeam.js';
 import { authHeaders } from '../utils/authHeader.js';
 
 const ROLE_LABELS = { admin: 'Admin', accountant: 'Accountant', consultant: 'Consultant' };
@@ -60,6 +61,7 @@ export default function Team() {
       );
       setInviteForm({ email: '', role: 'consultant' });
       reload();
+      refreshTeam();
     } catch (err) {
       setNotice(err.message);
     } finally {
@@ -73,6 +75,7 @@ export default function Team() {
     try {
       await mutate(`/api/team/invites/${invite.id}`, { method: 'DELETE', headers: authHeaders() });
       reload();
+      refreshTeam();
       setNotice('Invite revoked.');
     } catch (err) {
       setNotice(err.message);
@@ -102,6 +105,7 @@ export default function Team() {
         body: JSON.stringify({ is_active: !member.is_active }),
       });
       reload();
+      refreshTeam();
       setNotice(`${member.full_name} ${member.is_active ? 'deactivated' : 'activated'}.`);
     } catch (err) {
       setNotice(err.message);

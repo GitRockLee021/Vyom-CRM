@@ -6,8 +6,8 @@ import { createErrorHunter } from './error-hunter.js';
 // ERROR SWEEP — the "find every error in the whole app" test.
 //
 // How to run (same environment as the other E2E specs):
-//   API dev server  ->  port 5000      (npm run dev:server)
-//   Vite dev server ->  port 5173      (npm run dev:client)
+//   API dev server  ->  port 5001      (npm run dev:server)
+//   Vite dev server ->  port 5174      (npm run dev:client)
 //   then:            npx playwright test e2e/error-sweep.spec.js
 //   or the npm alias: npm run test:sweep
 //

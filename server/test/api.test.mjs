@@ -228,3 +228,46 @@ test('role permission matrix', async () => {
   locked.clients.create = true;
   await api(`/api/roles/${sc.id}`, { method: 'PUT', token: adminToken, body: { permissions: locked } });
 });
+
+test('client tasks follow the Managed-by user on reassignment', async () => {
+  const admin = await register(`reassign-${stamp}@example.com`, 'Reassign Admin', 'Reassign Firm');
+  const consultant = await inviteAccept(admin.token, `reassign-c-${stamp}@example.com`, 'consultant', 'Reassign Consultant');
+
+  const services = await api('/api/services', { token: admin.token });
+  const svc =
+    services.data.find((s) => s.name === 'GST Registration & Filing') || services.data[0];
+
+  const client = await api('/api/clients', {
+    method: 'POST',
+    token: admin.token,
+    body: { name: 'Reassign Client', client_type: 'business', assigned_to: admin.user.id, service_ids: [svc.id] },
+  });
+  assert.equal(client.status, 201);
+
+  // Wait for the background task sync, then confirm tasks belong to the owner.
+  let tasks = [];
+  for (let i = 0; i < 20 && !tasks.length; i++) {
+    tasks = (await api(`/api/tasks?client_id=${client.data.id}`, { token: admin.token })).data;
+    if (!tasks.length) await sleep(300);
+  }
+  assert.ok(tasks.length >= 1, 'expected generated tasks for the service');
+  assert.ok(tasks.every((t) => t.assigned_to === admin.user.id), 'new tasks should be assigned to the client owner');
+
+  // Re-assign the client to the consultant -> open tasks must follow.
+  const updated = await api(`/api/clients/${client.data.id}`, {
+    method: 'PUT',
+    token: admin.token,
+    body: { assigned_to: consultant.user.id },
+  });
+  assert.equal(updated.status, 200);
+
+  for (let i = 0; i < 20; i++) {
+    tasks = (await api(`/api/tasks?client_id=${client.data.id}`, { token: admin.token })).data;
+    if (tasks.every((t) => t.assigned_to === consultant.user.id)) break;
+    await sleep(300);
+  }
+  assert.ok(
+    tasks.every((t) => t.assigned_to === consultant.user.id),
+    'open tasks should be re-assigned to the new client owner',
+  );
+});

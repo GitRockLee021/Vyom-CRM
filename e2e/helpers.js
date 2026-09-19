@@ -1,6 +1,6 @@
 // Shared helpers for the core-module E2E specs.
 
-export const API = 'http://localhost:5000';
+export const API = 'http://localhost:5001';
 export const PW = 'QaE2ePass123!';
 
 export async function api(pathname, { method = 'GET', token, body } = {}) {

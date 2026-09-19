@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../hooks/useSettings.js';
@@ -7,7 +7,9 @@ const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: 'dashboard', end: true },
   { to: '/clients', label: 'Clients', icon: 'group' },
   { to: '/tasks', label: 'Tasks & Compliance', icon: 'task_alt' },
+  { to: '/whatsapp', label: 'WhatsApp', icon: 'message' },
   { label: 'Billing', icon: 'receipt_long' },
+  { to: '/services', label: 'Services', icon: 'handyman' },
   { label: 'Settings', icon: 'settings' },
 ];
 
@@ -40,6 +42,13 @@ const SUB_INACTIVE_CLASSES =
   'block px-3 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-on-surface transition-all font-label-md text-label-md';
 
 const ICONS = {
+  handyman: (
+    <>
+      <path d="M21.45 13.54 18.4 10.5a1 1 0 0 1 0-1.41l1.42-1.42a1 1 0 0 1 1.41 0l3.04 3.04a1 1 0 0 1 0 1.41l-1.42 1.42a1 1 0 0 1-1.41 0z" />
+      <path d="M12.78 4.96 9.73 1.92a1 1 0 0 0-1.41 0L6.9 3.34" />
+      <path d="m5.62 prochen 3.34" />
+    </>
+  ),
   dashboard: (
     <>
       <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -68,6 +77,11 @@ const ICONS = {
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
+    </>
+  ),
+  message: (
+    <>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </>
   ),
   settings: (

@@ -8,7 +8,7 @@ import { defaultRoleId } from '../utils/roles.js';
 
 const router = Router();
 
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5174';
 const ROLES = ['admin', 'accountant', 'consultant'];
 const ROLE_LABELS = { admin: 'Administrator', accountant: 'Accountant', consultant: 'Consultant' };
 

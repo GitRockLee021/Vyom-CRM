@@ -23,7 +23,12 @@ function nextDueDate(rule) {
   }
 
   if (rule.type === 'nextMonth') {
-    return ymd(today.getFullYear(), today.getMonth() + 1, rule.day);
+    // Due in the following month (e.g. TDS by 7th of next month). Compute via a
+    // Date so December rolls over to January of the next year, and clamp the day
+    // to the target month's real length (e.g. 31 -> 30 in April).
+    const target = new Date(y, m + 1, 1);
+    const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    return ymd(target.getFullYear(), target.getMonth(), Math.min(rule.day, lastDay));
   }
 
   if (rule.type === 'annual') {
@@ -38,6 +43,9 @@ function nextDueDate(rule) {
     const qEnd = Math.floor(m / 3) * 3 + 2; // month index of current quarter end (2,5,8,11)
     let dueMonth = qEnd + 1; // month following quarter end
     let dueYear = y;
+    // Q4: month following Dec is January (roll over). This avoids a nonexistent
+    // month index 12 (the previous Jan->April branch produced `2026-13-31`).
+    if (dueMonth > 11) { dueMonth -= 12; dueYear += 1; }
     // If this quarter's filing date has passed, move to next quarter.
     const lastDay = new Date(dueYear, dueMonth + 1, 0).getDate();
     if (new Date(dueYear, dueMonth, lastDay) < today) {
@@ -195,6 +203,15 @@ export async function generateTasksForService(clientId, service, tenantId, actor
   const engagement = await ensureEngagement(clientId, service, tenantId);
   const plans = planForService(service);
 
+  // Default each generated task to the client's responsible user ("Managed by")
+  // so the board's assignee grouping matches who actually owns the client. Falls
+  // back to whoever triggered generation, then NULL.
+  const { rows: clientRows } = await query(
+    'SELECT assigned_to FROM clients WHERE id = $1 AND tenant_id = $2',
+    [clientId, tenantId]
+  );
+  const ownerUserId = clientRows[0]?.assigned_to ?? actorUserId;
+
   // Fetch all existing tasks for this engagement in ONE round trip so missing
   // plans can be computed without a per-plan SELECT.
   const { rows: existingRows } = await query(
@@ -214,7 +231,7 @@ export async function generateTasksForService(clientId, service, tenantId, actor
       tenantId,
       clientId,
       engagement.id,
-      actorUserId ?? null,
+      ownerUserId ?? actorUserId,
       missing.map((p) => p.title),
       missing.map((p) => p.periodLabel),
       missing.map((p) => nextDueDate(p.due)),

@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
 // role against the client-side `can()` gating.
 // ---------------------------------------------------------------------------
 
-const API = 'http://localhost:5000';
+const API = 'http://localhost:5001';
 const PW = 'QaE2ePass123!';
 
 async function api(pathname, { method = 'GET', token, body } = {}) {

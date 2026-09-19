@@ -13,7 +13,9 @@ const RecordPayment = lazy(() => import('./pages/RecordPayment.jsx'));
 const PaymentForm = lazy(() => import('./pages/PaymentForm.jsx'));
 const Payments = lazy(() => import('./pages/Payments.jsx'));
 const Settings = lazy(() => import('./pages/Settings.jsx'));
+const Services = lazy(() => import('./pages/Services.jsx'));
 const Tasks = lazy(() => import('./pages/Tasks.jsx'));
+const WhatsApp = lazy(() => import('./pages/WhatsApp.jsx'));
 const Roles = lazy(() => import('./pages/Roles.jsx'));
 const Team = lazy(() => import('./pages/Team.jsx'));
 const Login = lazy(() => import('./pages/Login.jsx'));
@@ -85,6 +87,8 @@ export default function App() {
         <Route path="payments/:id/edit" element={<Suspense fallback={<LoadingScreen />}><PaymentForm /></Suspense>} />
         <Route path="invoices/:id/pay" element={<Suspense fallback={<LoadingScreen />}><RecordPayment /></Suspense>} />
         <Route path="tasks" element={<Suspense fallback={<LoadingScreen />}><Tasks /></Suspense>} />
+        <Route path="whatsapp" element={<Suspense fallback={<LoadingScreen />}><WhatsApp /></Suspense>} />
+        <Route path="services" element={<Suspense fallback={<LoadingScreen />}><Services /></Suspense>} />
         <Route path="settings" element={<Suspense fallback={<LoadingScreen />}><Settings /></Suspense>} />
         <Route path="settings/roles" element={<Suspense fallback={<LoadingScreen />}><Roles /></Suspense>} />
         <Route path="settings/team" element={<Suspense fallback={<LoadingScreen />}><Team /></Suspense>} />

@@ -105,7 +105,9 @@ router.get('/', requirePerm('clients.view'), async (req, res, next) => {
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await query(
-      `SELECT c.*, (${SERVICE_SELECT}) AS services
+      `SELECT c.*, ROW_NUMBER() OVER (ORDER BY c.created_at ASC, c.id)::int AS client_no,
+              (${SERVICE_SELECT}) AS services,
+              (SELECT full_name FROM users u WHERE u.id = c.assigned_to) AS assigned_to_name
        FROM clients c ${where} ORDER BY c.created_at DESC`,
       params
     );
@@ -119,7 +121,8 @@ router.get('/', requirePerm('clients.view'), async (req, res, next) => {
 router.get('/:id', requirePerm('clients.view'), async (req, res, next) => {
   try {
     const { rows } = await query(
-      `SELECT c.*, (${SERVICE_SELECT}) AS services
+      `SELECT c.*, (${SERVICE_SELECT}) AS services,
+              (SELECT full_name FROM users u WHERE u.id = c.assigned_to) AS assigned_to_name
        FROM clients c WHERE c.id = $1 AND c.tenant_id = $2`,
       [req.params.id, req.user.tenant_id]
     );
@@ -265,6 +268,20 @@ router.put('/:id', requirePerm('clients.edit'), async (req, res, next) => {
         syncTasksForClient(req.params.id, req.user.tenant_id, req.user.id).catch((err) =>
           console.error('[clients] task sync warning:', err.message)
         );
+      });
+    }
+
+    // Re-assign the client's open tasks when its "Managed by" user changes, so
+    // the board/My Tasks grouping follows the current client owner. Done tasks
+    // keep their historical assignee.
+    if (data.assigned_to) {
+      setImmediate(() => {
+        query(
+          `UPDATE tasks SET assigned_to = $1, updated_at = now()
+           WHERE client_id = $2 AND tenant_id = $3
+             AND status <> 'done' AND archived = FALSE AND removed_at IS NULL`,
+          [data.assigned_to, req.params.id, req.user.tenant_id],
+        ).catch((err) => console.error('[clients] task reassign warning:', err.message));
       });
     }
 

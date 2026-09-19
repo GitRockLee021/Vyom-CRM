@@ -43,6 +43,16 @@ async function autoMigrate() {
       CREATE INDEX IF NOT EXISTS idx_client_services_client ON client_services (client_id);
       CREATE INDEX IF NOT EXISTS idx_client_services_service ON client_services (service_id);
 
+      ALTER TABLE settings ADD COLUMN IF NOT EXISTS wa_access_token TEXT DEFAULT '';
+      ALTER TABLE settings ADD COLUMN IF NOT EXISTS wa_phone_number_id VARCHAR(40) DEFAULT '';
+      ALTER TABLE settings ADD COLUMN IF NOT EXISTS wa_graph_version VARCHAR(10) DEFAULT 'v21.0';
+
+      -- Services catalogue is a flat list (name + fee); code/category are optional.
+      ALTER TABLE services ALTER COLUMN code DROP NOT NULL;
+      ALTER TABLE services ALTER COLUMN category DROP NOT NULL;
+      DROP INDEX IF EXISTS uq_services_tenant_code;
+      DROP INDEX IF EXISTS services_code_key;
+
       CREATE TABLE IF NOT EXISTS wa_messages (
         id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         tenant_id     INTEGER NOT NULL,
@@ -131,7 +141,7 @@ async function autoMigrate() {
       ) u
       WHERE t.tenant_id = u.tenant_id AND t.assigned_to IS NULL;
     `);
-    console.log('[db] client_services, wa_messages and tasks-module tables ensured');
+    console.log('[db] client_services, wa_messages, tasks-module tables and settings ensured');
   } catch (err) {
     console.error('[db] auto-migrate warning:', err.message);
   }

@@ -521,35 +521,37 @@ export default function Clients() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low border-b border-outline-variant">
+                      <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Client ID</th>
                       <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Client Name</th>
                       <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Assessee Type</th>
-                      <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Email</th>
                       <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Phone</th>
                       <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Services</th>
                       <th className="px-6 py-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="font-data-mono text-data-mono text-on-surface divide-y divide-outline-variant">
                     {loading && (
                       <tr>
-                        <td className="px-6 py-6 text-on-surface-variant" colSpan="7">Loading clients…</td>
+                        <td className="px-6 py-6 text-on-surface-variant" colSpan="6">Loading clients…</td>
                       </tr>
                     )}
                     {!loading && error && (
                       <tr>
-                        <td className="px-6 py-6 text-error" colSpan="7">{error}</td>
+                        <td className="px-6 py-6 text-error" colSpan="6">{error}</td>
                       </tr>
                     )}
                     {!loading && !error && !rows.length && (
                       <tr>
-                        <td className="px-6 py-6 text-on-surface-variant" colSpan="7">
+                        <td className="px-6 py-6 text-on-surface-variant" colSpan="6">
                           {filtered.length ? 'No clients on this page.' : clients.length ? 'No clients match your filters.' : 'No clients yet. Use "Add Client" or import a CSV.'}
                         </td>
                       </tr>
                     )}
                     {!loading && !error && rows.map((client, i) => (
                       <tr key={client.id} className={`hover:bg-surface-container-low transition-colors group${i % 2 === 1 ? ' bg-[#FAF8FD]' : ''}`}>
+                        <td className="px-6 py-4 text-on-surface-variant font-data-mono">
+                          <span className="bg-surface-container-low border border-outline-variant rounded px-1.5 py-0.5 text-xs">#{client.client_no ?? (start + i + 1)}</span>
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3 min-w-0">
                             <div className={`w-9 h-9 rounded-full text-on-primary flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColor(client.name)}`}>
@@ -564,36 +566,17 @@ export default function Clients() {
                                 <span className="text-left font-medium block truncate max-w-[220px]">{client.name}</span>
                               )}
                               <div className="text-xs text-on-surface-variant font-normal truncate max-w-[220px]">
-                                {[client.city, client.state].filter(Boolean).join(', ') || '—'}
+                                {client.assigned_to_name || 'Unassigned'}
                               </div>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-on-surface-variant">{typeLabel(client.client_type)}</td>
-                        <td className="px-6 py-4">{client.email || '—'}</td>
                         <td className="px-6 py-4">{client.phone || '—'}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[client.status] || STATUS_BADGE.inactive}`}>
                             {(client.status || 'inactive').replace(/^\w/, (c) => c.toUpperCase())}
                           </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          {Array.isArray(client.services) && client.services.length ? (
-                            <div className="flex flex-wrap gap-1.5 max-w-xs">
-                              {client.services.slice(0, 2).map((s) => (
-                                <span key={s.id} className="inline-flex items-center px-2 py-0.5 bg-primary text-white rounded-full text-[11px] font-medium">
-                                  {s.name}
-                                </span>
-                              ))}
-                              {client.services.length > 2 && (
-                                <span className="inline-flex items-center px-2 py-0.5 bg-surface-container-high text-on-surface-variant rounded-full text-[11px] font-medium">
-                                  +{client.services.length - 2} more
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-on-surface-variant">—</span>
-                          )}
                         </td>
                         <td className="px-6 py-4 text-right space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           {(() => {
