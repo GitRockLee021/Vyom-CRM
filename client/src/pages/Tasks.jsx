@@ -83,7 +83,7 @@ export default function Tasks() {
   const { user } = useAuth();
   const [view, setView] = useState('board');
   const [serviceFilter, setServiceFilter] = useState(null);
-  const [myTasks, setMyTasks] = useState(user?.role !== 'admin');
+  const [assigneeFilter, setAssigneeFilter] = useState(user?.role !== 'admin' ? 'me' : '');
   const [modalTaskId, setModalTaskId] = useState(null);
   const [createMode, setCreateMode] = useState(null);
   const [toast, setToast] = useState('');
@@ -93,10 +93,12 @@ export default function Tasks() {
   const [filterMonth, setFilterMonth] = useState(now.getMonth()); // 0-11, -1 = all
   const [filterYear, setFilterYear] = useState(now.getFullYear());
   const [moreOpen, setMoreOpen] = useState(false);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
 
   const params = new URLSearchParams();
   if (serviceFilter) params.set('service_id', serviceFilter);
-  if (myTasks && user?.id) params.set('assigned_to', user.id);
+  if (assigneeFilter === 'me' && user?.id) params.set('assigned_to', user.id);
+  else if (assigneeFilter) params.set('assigned_to', assigneeFilter);
   const qs = params.toString() ? `?${params.toString()}` : '';
   const { data: allTasks, error, loading, reload } = useFetch(`/tasks${qs}`);
 
@@ -284,15 +286,58 @@ export default function Tasks() {
         </div>
 
         <div className="inline-flex items-center gap-3">
-          {/* My tasks filter */}
-          <button
-            onClick={() => setMyTasks((v) => !v)}
-            className={`px-3.5 py-2 rounded-full border font-label-md text-label-md inline-flex items-center gap-1.5 transition-colors ${myTasks ? 'bg-primary text-white border-primary shadow-card' : 'border-outline-variant text-on-surface-variant bg-surface-container-lowest hover:bg-surface-container-low'}`}
-            title={myTasks ? 'Showing tasks assigned to you only' : 'Show all tasks in the workspace'}
-          >
-            <span className="material-symbols-outlined text-[18px]">assignment_ind</span>
-            My tasks
-          </button>
+          {/* Assignee filter */}
+          <div className="relative">
+            {assigneeOpen && <div className="fixed inset-0 z-10" onClick={() => setAssigneeOpen(false)} />}
+            <button
+              onClick={() => setAssigneeOpen((o) => !o)}
+              className={`px-3.5 py-2 rounded-full border font-label-md text-label-md inline-flex items-center gap-1.5 transition-colors ${assigneeFilter ? 'bg-primary text-white border-primary shadow-card' : 'border-outline-variant text-on-surface-variant bg-surface-container-lowest hover:bg-surface-container-low'}`}
+              title="Filter tasks by assignee"
+            >
+              {assigneeFilter === 'me' ? (
+                <span className="material-symbols-outlined text-[18px]">assignment_ind</span>
+              ) : assigneeFilter ? (
+                <span className="w-4 h-4 rounded-full text-white text-[8px] font-bold inline-flex items-center justify-center shrink-0" style={{ background: initialsColor((memberList.find((m) => m.id === assigneeFilter)?.full_name) || '') }}>{avatar((memberList.find((m) => m.id === assigneeFilter)?.full_name) || '?')}</span>
+              ) : (
+                <span className="material-symbols-outlined text-[18px]">filter_alt</span>
+              )}
+              {assigneeFilter === 'me' ? 'My tasks' : assigneeFilter ? (memberList.find((m) => m.id === assigneeFilter)?.full_name || 'Assignee') : 'Everyone'}
+              <span className="material-symbols-outlined text-[14px]">arrow_drop_down</span>
+            </button>
+            {assigneeOpen && (
+              <div className="absolute left-0 z-20 mt-2 w-60 rounded-xl bg-surface-container-lowest border border-outline-variant shadow-card p-2">
+                <button
+                  type="button"
+                  onClick={() => { setAssigneeFilter(''); setAssigneeOpen(false); }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-label-md font-label-md flex items-center gap-2 ${assigneeFilter === '' ? 'bg-primary text-white' : 'text-on-surface hover:bg-surface-container-low'}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">public</span>Everyone
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAssigneeFilter('me'); setAssigneeOpen(false); }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-label-md font-label-md flex items-center gap-2 ${assigneeFilter === 'me' ? 'bg-primary text-white' : 'text-on-surface hover:bg-surface-container-low'}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">assignment_ind</span>My tasks
+                </button>
+                {memberList.length > 0 && <div className="border-t border-outline-variant my-1.5 mx-1" />}
+                {memberList.map((m) => {
+                  const active = assigneeFilter === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => { setAssigneeFilter(m.id); setAssigneeOpen(false); }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-label-md font-label-md flex items-center gap-2 ${active ? 'bg-primary text-white' : 'text-on-surface hover:bg-surface-container-low'}`}
+                    >
+                      <span className="w-5 h-5 rounded-full text-white text-[9px] font-bold inline-flex items-center justify-center shrink-0" style={{ background: initialsColor(m.full_name) }}>{avatar(m.full_name)}</span>
+                      <span className="truncate">{m.full_name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Add Task */}
           <button
@@ -573,7 +618,12 @@ function TaskCard({ task, onClick, onDragStart, onDragEnd, onComplete }) {
         <span className="text-[11px] text-on-surface-variant">{task.checklist_total > 0 ? `☑ ${task.checklist_done}/${task.checklist_total}` : ''}</span>
         <div className="flex items-center gap-2">
           {task.due_date && <span className={`text-[11px] font-semibold ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-red-600' : 'text-on-surface-variant'}`}>{fmtDate(task.due_date)}</span>}
-          {task.assigned_to_name && <span className="w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center" style={{ background: initialsColor(task.assigned_to_name) }}>{avatar(task.assigned_to_name)}</span>}
+          {task.assigned_to_name && (
+            <span className="flex items-center gap-1 max-w-[110px]" title={task.assigned_to_name}>
+              <span className="w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0" style={{ background: initialsColor(task.assigned_to_name) }}>{avatar(task.assigned_to_name)}</span>
+              <span className="text-[10.5px] font-semibold text-on-surface-variant truncate">{task.assigned_to_name}</span>
+            </span>
+          )}
         </div>
       </div>
     </div>
